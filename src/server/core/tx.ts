@@ -42,6 +42,28 @@ const DEADLOCK_CODES = new Set([
   "40P01", // deadlock_detected
 ]);
 
+/**
+ * Fallos TRANSITORIOS de infraestructura bajo contención.
+ *
+ * No son errores de lógica ni de datos: son "ahora mismo no hay hueco". Con
+ * una base gestionada y varias cajas simultáneas, agotar el cupo de conexiones
+ * momentáneamente es normal, y reintentar tras una espera corta funciona.
+ *
+ * Se detectó midiendo: la prueba de diez cajas simultáneas fallaba una de cada
+ * tres ejecuciones con "timeout exceeded when trying to connect", rechazando
+ * ventas legítimas. La lógica era correcta; lo que faltaba era paciencia.
+ *
+ * Se tratan igual que un abrazo mortal porque el remedio es el mismo:
+ * esperar un poco y volver a intentarlo.
+ */
+const TRANSIENT_PATTERNS = [
+  "timeout exceeded when trying to connect",
+  "Unable to start a transaction",
+  "Failed to connect to upstream database",
+  "Connection terminated",
+  "too many clients",
+];
+
 function isRetryable(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
@@ -51,15 +73,17 @@ function isRetryable(error: unknown): boolean {
     return true;
   }
 
+  if (typeof candidate.message !== "string") return false;
+
+  const message = candidate.message;
+
   // El adaptador de driver a veces envuelve el error del motor; el código
   // SQLSTATE sigue apareciendo en el mensaje.
-  if (typeof candidate.message === "string") {
-    return [...DEADLOCK_CODES].some((code) =>
-      (candidate.message as string).includes(code),
-    );
+  if ([...DEADLOCK_CODES].some((code) => message.includes(code))) {
+    return true;
   }
 
-  return false;
+  return TRANSIENT_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
 const sleep = (ms: number) =>
@@ -118,9 +142,17 @@ export async function transaction<T>(
         throw error;
       }
 
-      // Espera exponencial con jitter: si dos cajas chocan, evita que vuelvan
-      // a chocar sincronizadas en el reintento.
-      const backoff = 25 * 2 ** attempt + Math.random() * 25;
+      /*
+       * Espera exponencial con dispersión aleatoria.
+       *
+       * La dispersión no es adorno: sin ella, dos cajas que chocan esperan
+       * exactamente lo mismo y vuelven a chocar sincronizadas en el reintento.
+       *
+       * La base de 150 ms está pensada para el caso de contención de
+       * conexiones: reintentar a los 25 ms no sirve de nada si la conexión que
+       * hace falta la está usando una transacción que tardará medio segundo.
+       */
+      const backoff = 150 * 2 ** attempt + Math.random() * 150;
       logger.warn("Conflicto de concurrencia; reintentando transacción", {
         attempt: attempt + 1,
         backoffMs: Math.round(backoff),

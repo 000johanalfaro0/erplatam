@@ -52,9 +52,19 @@ function createClient(): PrismaClient {
      * Configurable por si el entorno de destino admite más.
      */
     max: Number(process.env.DATABASE_POOL_MAX ?? 5),
-    // Si en 10 s no hay conexión libre, es mejor fallar con un error claro
-    // que dejar la petición colgada indefinidamente.
-    connectionTimeoutMillis: 10_000,
+    /*
+     * Debe ser COHERENTE con el `maxWait` de las transacciones (30 s, ver
+     * `core/tx.ts`). Ambos miden la misma espera: obtener una conexión libre.
+     *
+     * Tenerlo en 10 s mientras la transacción esperaba 30 producía rechazos
+     * inconsistentes bajo carga —"timeout exceeded when trying to connect"—
+     * pese a que el sistema funcionaba: el pool se rendía antes de que la
+     * transacción hubiera agotado su paciencia.
+     */
+    connectionTimeoutMillis: 30_000,
+    // Cierra conexiones ociosas para no ocupar el cupo del proveedor entre
+    // ráfagas de actividad.
+    idleTimeoutMillis: 30_000,
   });
 
   return new PrismaClient({
