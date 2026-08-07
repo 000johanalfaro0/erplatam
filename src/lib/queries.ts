@@ -261,11 +261,17 @@ export interface SaleFilters {
   sortDir?: "asc" | "desc";
 }
 
-export function useSales(filters: SaleFilters) {
+export function useSales(
+  filters: SaleFilters,
+  initialData?: Paginated<Sale>,
+) {
   return useQuery({
     queryKey: queryKeys.sales(filters),
     queryFn: () => api.get<Paginated<Sale>>("/sales", filters),
     placeholderData: (previous) => previous,
+    // Primera carga resuelta en el servidor. Quien la pasa se encarga de
+    // hacerlo solo cuando los filtros son los de por defecto.
+    initialData,
   });
 }
 
