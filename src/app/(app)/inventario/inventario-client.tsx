@@ -30,7 +30,6 @@ import { ApiError, api, type Paginated } from "@/lib/api";
 import { money, quantity } from "@/lib/format";
 import {
   type Product,
-  type ReferenceData,
   useProducts,
   useReference,
 } from "@/lib/queries";
@@ -48,10 +47,8 @@ import { ProductFormDrawer } from "@/modules/products/product-form";
  */
 export function InventarioClient({
   initialData,
-  initialReference,
 }: {
   initialData: Paginated<Product>;
-  initialReference: ReferenceData;
 }) {
   const { business } = useSession();
   const canWrite = useCan("products:write");
@@ -83,7 +80,7 @@ export function InventarioClient({
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data: reference } = useReference(initialReference);
+  const { data: reference } = useReference();
   const { data, isLoading } = useProducts(
     {
     search: debouncedSearch || undefined,

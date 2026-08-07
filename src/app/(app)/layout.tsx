@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { QueryHydrator } from "@/components/query-hydrator";
 import { SessionProvider } from "@/components/session-provider";
 import { getOptionalContext } from "@/server/http/context";
 import { getCurrentUser } from "@/server/modules/auth";
+import { getReferenceData } from "@/server/modules/reference";
 
 /**
  * Layout protegido.
@@ -29,7 +31,19 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     redirect("/login");
   }
 
-  const user = await getCurrentUser(ctx);
+  /*
+   * El usuario y los catálogos de referencia se piden EN PARALELO y en el
+   * mismo viaje que ya se estaba haciendo para validar la sesión.
+   *
+   * Los catálogos los necesita casi toda pantalla —los desplegables de
+   * categoría, proveedor, impuesto y método de pago—, y antes cada una los
+   * pedía por su cuenta al montarse. Eso añadía ~300 ms antes de poder pintar
+   * cualquier formulario. Aquí son gratis.
+   */
+  const [user, reference] = await Promise.all([
+    getCurrentUser(ctx),
+    getReferenceData(ctx),
+  ]);
 
   if (!user.business.settings) {
     // Estado imposible salvo que falte el seed. Mejor un mensaje claro que un
@@ -57,7 +71,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         settings: user.business.settings,
       }}
     >
-      <AppShell>{children}</AppShell>
+      <QueryHydrator reference={reference}>
+        <AppShell>{children}</AppShell>
+      </QueryHydrator>
     </SessionProvider>
   );
 }

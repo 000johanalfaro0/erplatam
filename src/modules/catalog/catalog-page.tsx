@@ -74,6 +74,13 @@ export interface CatalogPageProps<T extends { id: string; name: string }> {
   };
   /** Texto de la confirmación de borrado. */
   deleteDescription: (row: T) => string;
+  /**
+   * Primera página, resuelta en el servidor.
+   *
+   * Sin esto el componente pediría los datos al montarse, lo que añade un
+   * viaje completo al servidor (~300 ms) antes de poder pintar la tabla.
+   */
+  initialData?: Paginated<T>;
 }
 
 export function CatalogPage<T extends { id: string; name: string }>({
@@ -89,6 +96,7 @@ export function CatalogPage<T extends { id: string; name: string }>({
   emptyDescription,
   rowAction,
   deleteDescription,
+  initialData,
 }: CatalogPageProps<T>) {
   const canWrite = useCan(writePermission);
   const queryClient = useQueryClient();
@@ -120,6 +128,10 @@ export function CatalogPage<T extends { id: string; name: string }>({
         pageSize: 25,
       }),
     placeholderData: (previous) => previous,
+    // Solo aplica a la primera consulta (sin búsqueda, página 1). Al filtrar
+    // o paginar, TanStack Query pide al servidor como siempre.
+    initialData:
+      !debounced && page === 1 ? initialData : undefined,
   });
 
   function openNew() {
