@@ -184,6 +184,13 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PATCH", body }),
 
+  /**
+   * PUT sustituye el recurso completo; PATCH lo modifica en parte.
+   * El cuestionario usa PUT porque guardar reemplaza todas las respuestas.
+   */
+  put: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "PUT", body }),
+
   delete: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "DELETE", body }),
 };

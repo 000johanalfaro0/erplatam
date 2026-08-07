@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ERP
 
-## Getting Started
+Sistema de gestión empresarial para el mercado mexicano: ventas, inventario,
+compras, gastos, clientes y reportes.
 
-First, run the development server:
+## Arranque rápido
 
 ```bash
+npm install
+cp .env.example .env       # rellenar DATABASE_URL y SESSION_SECRET
+npx prisma generate
+npm run db:deploy
+npm run db:seed -- --demo
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+→ http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Documentación
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Todo está en **[`/docs`](docs/)**. Empieza por
+[docs/README.md](docs/README.md).
 
-## Learn More
+| | |
+|---|---|
+| [architecture.md](docs/architecture.md) | Cómo está organizado y por qué |
+| [database.md](docs/database.md) | Modelo de datos y convenciones |
+| [api.md](docs/api.md) | Endpoints y errores |
+| [security.md](docs/security.md) | Seguridad por capas, incluido lo que **no** cubre |
+| [deployment.md](docs/deployment.md) | Despliegue y copias de seguridad |
+| [development.md](docs/development.md) | Cómo trabajar en el proyecto |
+| [user-guide.md](docs/user-guide.md) | Guía para quien lo usa |
+| [decisions.md](docs/decisions.md) | Decisiones técnicas y alternativas descartadas |
 
-To learn more about Next.js, take a look at the following resources:
+## Lo esencial
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Dinero y cantidades son enteros.** Centavos, mili-unidades y puntos básicos.
+Cero coma flotante. Es lo que hace que los cortes de caja cuadren siempre.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**El inventario es un libro mayor.** `Product.stock` es solo caché; la verdad es
+la suma de movimientos. Toda existencia procede de un movimiento registrado con
+motivo y responsable.
 
-## Deploy on Vercel
+**Las operaciones críticas son atómicas.** Una venta crea documento, líneas,
+pagos, movimientos y auditoría en una transacción, con bloqueo de filas. Es
+imposible que la venta se cree y el inventario no se actualice.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**El dominio no conoce el framework.** `src/server/` no importa nada de Next.js.
+Hay tests que lo verifican.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Stack
+
+Next.js · TypeScript · PostgreSQL · Prisma · Tailwind · Zod · TanStack Query ·
+Vitest · Playwright
+
+## Comandos
+
+```bash
+npm run dev          # desarrollo
+npm run verify       # typecheck + lint + tests
+npm test             # solo tests
+npm run db:studio    # explorador de la base de datos
+```

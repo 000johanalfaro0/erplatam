@@ -86,7 +86,25 @@ export async function transaction<T>(
   fn: (tx: Tx) => Promise<T>,
   options: TransactionOptions = {},
 ): Promise<T> {
-  const { timeout = 15_000, maxWait = 5_000, retries = 3 } = options;
+  /*
+   * `maxWait` es cuánto se espera para OBTENER una conexión y empezar; no
+   * cuánto dura la transacción. Los 30 segundos parecen mucho y son
+   * deliberados.
+   *
+   * El pool tiene 5 conexiones a propósito (ver `core/db.ts`): con más, la
+   * base gestionada rechaza conexiones bajo carga. Eso significa que con 10
+   * cajas simultáneas, cinco ESPERAN en cola — y esa espera es normal, no un
+   * error.
+   *
+   * Con el valor anterior de 5 s, las peticiones en cola fallaban con
+   * "Unable to start a transaction in the given time" pese a que el sistema
+   * funcionaba correctamente: se rechazaban ventas legítimas por impaciencia.
+   *
+   * `timeout` (cuánto puede durar ya iniciada) se mantiene ajustado: una
+   * transacción larga retiene bloqueos y bloquea a las demás. Si una venta
+   * tarda más de 15 s, algo va mal y es mejor abortarla.
+   */
+  const { timeout = 15_000, maxWait = 30_000, retries = 3 } = options;
 
   let lastError: unknown;
 

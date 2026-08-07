@@ -32,9 +32,29 @@ const globalForPrisma = globalThis as unknown as {
 function createClient(): PrismaClient {
   const adapter = new PrismaPg({
     connectionString: env.DATABASE_URL,
-    // Límite conservador: Postgres acepta ~100 conexiones por defecto y en
-    // serverless cada instancia abre su propio pool.
-    max: 10,
+    /*
+     * TAMAÑO DEL POOL — medido, no elegido al azar.
+     *
+     * Con `max: 10`, una prueba de 10 ventas simultáneas sobre el mismo
+     * producto hacía caer la base con "Failed to connect to upstream
+     * database": el plan gestionado limita las conexiones concurrentes, y
+     * abrir diez a la vez lo desborda.
+     *
+     * Bajarlo a 5 cambia el modo de fallo por uno mucho mejor: en lugar de
+     * que la base rechace la conexión, las peticiones extra ESPERAN en la
+     * cola local del pool. Como las transacciones de venta duran decenas de
+     * milisegundos, esa espera es imperceptible.
+     *
+     * En serverless importa el doble: cada instancia abre su propio pool, así
+     * que el total es `max × instancias activas`. Un pool pequeño es lo único
+     * que evita agotar el límite del proveedor bajo carga.
+     *
+     * Configurable por si el entorno de destino admite más.
+     */
+    max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+    // Si en 10 s no hay conexión libre, es mejor fallar con un error claro
+    // que dejar la petición colgada indefinidamente.
+    connectionTimeoutMillis: 10_000,
   });
 
   return new PrismaClient({

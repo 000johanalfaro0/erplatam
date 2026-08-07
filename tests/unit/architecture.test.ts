@@ -1,0 +1,185 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+/**
+ * TESTS DE ARQUITECTURA
+ * ===========================================================================
+ * Las reglas de modularidad no se sostienen con buena voluntad: se sostienen
+ * porque romperlas rompe la suite.
+ *
+ * Estas pruebas leen el código fuente y verifican las tres reglas que
+ * mantienen el sistema desacoplado. Sin ellas, la primera vez que alguien
+ * tenga prisa importará el repositorio de otro módulo "solo esta vez", y en
+ * seis meses todo estará entrelazado.
+ */
+
+const SRC = join(process.cwd(), "src");
+
+function listFiles(dir: string, extensions = [".ts", ".tsx"]): string[] {
+  const out: string[] = [];
+
+  function walk(current: string) {
+    for (const entry of readdirSync(current)) {
+      const full = join(current, entry);
+
+      // El cliente generado por Prisma no es código nuestro.
+      if (entry === "generated" || entry === "node_modules") continue;
+
+      if (statSync(full).isDirectory()) {
+        walk(full);
+      } else if (extensions.some((ext) => entry.endsWith(ext))) {
+        out.push(full);
+      }
+    }
+  }
+
+  walk(dir);
+  return out;
+}
+
+function importsOf(file: string): string[] {
+  const content = readFileSync(file, "utf8");
+  const matches = content.matchAll(/from\s+["']([^"']+)["']/g);
+  return [...matches].map((match) => match[1]);
+}
+
+describe("Regla 1 — encapsulación entre módulos", () => {
+  it("ningún módulo importa los internos de otro módulo", () => {
+    /*
+     * Permitido:   import { createSale } from "@/server/modules/sales"
+     * Prohibido:   import { ... } from "@/server/modules/sales/service"
+     *
+     * Motivo: mientras los cruces pasen por el `index.ts`, reescribir las
+     * entrañas de un módulo no puede romper a los demás. En cuanto alguien
+     * importa un archivo interno, ese archivo se vuelve parte del contrato
+     * público sin que nadie lo haya decidido.
+     */
+    const violaciones: string[] = [];
+
+    for (const file of listFiles(join(SRC, "server", "modules"))) {
+      const propio = relative(join(SRC, "server", "modules"), file).split(
+        /[\\/]/,
+      )[0];
+
+      for (const spec of importsOf(file)) {
+        const match = spec.match(/^@\/server\/modules\/([^/]+)\/(.+)$/);
+        if (!match) continue;
+
+        const [, modulo] = match;
+        // Dentro del propio módulo sí se puede importar cualquier archivo.
+        if (modulo === propio) continue;
+
+        violaciones.push(
+          `${relative(SRC, file)} importa "${spec}" — debe usar "@/server/modules/${modulo}"`,
+        );
+      }
+    }
+
+    expect(violaciones, violaciones.join("\n")).toEqual([]);
+  });
+
+  it("todo módulo tiene su index.ts como puerta de entrada", () => {
+    const modulesDir = join(SRC, "server", "modules");
+    const sinIndex = readdirSync(modulesDir).filter((name) => {
+      const full = join(modulesDir, name);
+      if (!statSync(full).isDirectory()) return false;
+      return !readdirSync(full).includes("index.ts");
+    });
+
+    expect(
+      sinIndex,
+      `Módulos sin index.ts: ${sinIndex.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Regla 2 — el dominio no conoce el framework", () => {
+  it("core/ y modules/ no importan nada de Next.js", () => {
+    /*
+     * Es lo que hace que `src/server/` sea portable: si mañana hiciera falta
+     * un backend independiente (Fastify, NestJS, una cola de trabajos), la
+     * lógica de negocio se mueve tal cual y solo se reescribe la capa HTTP.
+     *
+     * El único sitio que puede tocar Next es `src/server/http/`, que es
+     * precisamente la capa de transporte.
+     */
+    const violaciones: string[] = [];
+
+    for (const dir of ["core", "modules"]) {
+      for (const file of listFiles(join(SRC, "server", dir))) {
+        for (const spec of importsOf(file)) {
+          if (spec === "next" || spec.startsWith("next/")) {
+            violaciones.push(`${relative(SRC, file)} importa "${spec}"`);
+          }
+        }
+      }
+    }
+
+    expect(violaciones, violaciones.join("\n")).toEqual([]);
+  });
+
+  it("el dominio no importa componentes de interfaz", () => {
+    const violaciones: string[] = [];
+
+    for (const dir of ["core", "modules"]) {
+      for (const file of listFiles(join(SRC, "server", dir))) {
+        for (const spec of importsOf(file)) {
+          if (
+            spec.startsWith("@/components") ||
+            spec.startsWith("@/modules") ||
+            spec === "react"
+          ) {
+            violaciones.push(`${relative(SRC, file)} importa "${spec}"`);
+          }
+        }
+      }
+    }
+
+    expect(violaciones, violaciones.join("\n")).toEqual([]);
+  });
+});
+
+describe("Regla 3 — el cliente no accede a la base de datos", () => {
+  it("ningún componente de interfaz importa el cliente de base de datos", () => {
+    /*
+     * Un `import { db }` en un componente marcado con "use client" no falla al
+     * compilar de forma evidente, pero mete el cliente de Prisma en el bundle
+     * del navegador. En el mejor caso hincha la descarga; en el peor, expone
+     * la cadena de conexión.
+     *
+     * Se permite en Server Components (páginas sin "use client"), que sí
+     * corren en el servidor.
+     */
+    const violaciones: string[] = [];
+
+    for (const dir of ["components", "modules", "lib"]) {
+      for (const file of listFiles(join(SRC, dir))) {
+        const content = readFileSync(file, "utf8");
+        const esCliente = /^["']use client["']/m.test(content);
+        if (!esCliente) continue;
+
+        for (const spec of importsOf(file)) {
+          if (
+            spec === "@/server/core/db" ||
+            spec.startsWith("@/server/modules/")
+          ) {
+            // Importar solo TIPOS o funciones puras sí es válido y útil:
+            // el punto de venta reutiliza las funciones de cálculo del
+            // servidor precisamente para que los totales coincidan.
+            const esPuro =
+              spec === "@/server/core/pricing" ||
+              spec === "@/server/core/money" ||
+              spec === "@/server/core/permissions";
+            if (esPuro) continue;
+
+            violaciones.push(`${relative(SRC, file)} importa "${spec}"`);
+          }
+        }
+      }
+    }
+
+    expect(violaciones, violaciones.join("\n")).toEqual([]);
+  });
+});
