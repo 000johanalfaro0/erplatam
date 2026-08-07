@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| **Producción** | https://erp-mx-git-main-johan-alfaro-mejias-projects.vercel.app |
+| **Producción** | https://erp-mx-theta.vercel.app ← usar esta |
 | **Repositorio** | https://github.com/000johanalfaro0/erp-mx (privado) |
 | **Usuario demo** | `admin@erp.local` |
 | **Contraseña** | `Admin123!` — ⚠️ circuló por chat, **cambiar antes de la demo** |
@@ -22,6 +22,11 @@ Cambiar la contraseña sin exponerla:
 ```bash
 npx tsx scripts/set-password.ts admin@erp.local
 ```
+
+> `erp-mx-theta.vercel.app` es el dominio de producción: siempre apunta al
+> último despliegue. `erp-mx-git-main-…` es el alias de la rama y depende del
+> despliegue automático por Git, que **no es de fiar** (ver abajo). Compartir
+> con el cliente el primero.
 
 ---
 
@@ -49,7 +54,35 @@ El plan gratuito de Prisma Postgres no incluye backups. Para datos reales de
 cliente durante varios días, valorar el plan Starter ($10/mes) o hacer
 `pg_dump` manual. Ver [deployment.md](deployment.md).
 
-### 4. Desarrollo y producción comparten base de datos
+### 4. Hacer push NO garantiza desplegar
+
+El repositorio está conectado al proyecto de Vercel, pero el disparo
+automático falla de vez en cuando: el commit `1976f33` se subió y media hora
+después seguía sin existir despliegue, con producción sirviendo el build
+anterior. No es el problema de autoría de commits que ya se corrigió —ese
+mismo día hubo pushes que sí dispararon—, sino que el disparo se pierde.
+
+**Nunca dar por hecho que un push llegó a producción.** Desplegar a mano y
+comprobar:
+
+```bash
+npx vercel deploy --prod --yes --scope johan-alfaro-mejias-projects
+curl -s https://erp-mx-theta.vercel.app/login | grep -o '<title>[^<]*'
+```
+
+Si el alias de rama se queda atrás, se reengancha:
+
+```bash
+npx vercel alias set <despliegue>.vercel.app \
+  erp-mx-git-main-johan-alfaro-mejias-projects.vercel.app \
+  --scope johan-alfaro-mejias-projects
+```
+
+Nota: el MCP de Vercel de esta sesión no ve el proyecto (403 al listar
+despliegues, 404 al pedirlo por nombre) aunque sí ve el equipo. El CLI, con
+la cuenta `98jomori25-2637`, sí puede. Para diagnosticar, usar el CLI.
+
+### 5. Desarrollo y producción comparten base de datos
 
 El servidor de desarrollo local consume conexiones que producción necesita, y
 los tests de integración crean datos en la misma base. Provisionar una base
@@ -94,25 +127,40 @@ datos en el servidor (un solo viaje, ~387 ms de media).
   capturan (`scripts/screenshot*.ts`) y sí verifican encabezados y errores de
   consola, pero no son tests con aserciones de negocio.
 
-### Pendiente de decidir — REDISEÑO VISUAL
+### Pendiente de decidir — REDISEÑO VISUAL: falta que el cliente elija
 
 El cliente señaló que **el diseño, el nombre y el icono se sienten generados
-por IA**. Tiene razón. Señales concretas identificadas:
+por IA**. Tenía razón. Señales concretas: acento `#2563eb` (el azul por
+defecto de Tailwind), Inter en todo, mismo radio y misma sombra en cada
+tarjeta, densidad baja para lo que es un ERP, y nombre "ERP" con la inicial
+en un cuadrado —placeholders que nunca se sustituyeron—.
 
-- Acento `#2563eb`: el azul por defecto de Tailwind
-- Tipografía Inter: la de todo dashboard desde 2020
-- Todo en tarjetas con el mismo radio y la misma sombra
-- Densidad baja (filas de ~44 px) para lo que es un ERP
-- Estados vacíos con icono centrado en cuadrado redondeado
-- Nombre "ERP" e icono con la letra "E" — placeholders nunca sustituidos
+**Ya está construido.** Tres direcciones completas, conmutables desde el
+botón de la paleta en la barra superior:
 
-**Plan acordado:** generar **3 direcciones visuales completas**, conmutables
-con un botón, para que el cliente elija en vivo durante la demo. Una vez
-elegida, se consolida esa y se retiran las otras dos.
+| | Apuesta | Color | Tipografía | Esquinas | Fila |
+|---|---|---|---|---|---|
+| **Mostrador** | Cálida, para quien nunca usó un sistema | Terracota | Bricolage Grotesque | Generosas | 3.25rem |
+| **Caja** | Densa, para quien pasa ocho horas aquí | Verde terminal | Monoespaciada | Casi rectas | 2.25rem |
+| **Libro** | Sobria, de libro de cuentas | Tinta | Source Serif 4 | Sin redondeo | 2.75rem |
 
-El nombre y el icono forman parte de cada dirección.
+Cada una trae su propio nombre, descriptor e icono. Están en
+`src/config/themes.ts`; el conmutador, en `src/components/theme-switcher.tsx`.
 
-Pendiente de que el cliente indique referencias visuales y tono deseado.
+Capturas para comparar sin abrir la app:
+`capturas/50-direccion-*.png` (inventario) y `capturas/51-acceso-*.png` (login).
+
+**Lo que falta es la decisión del cliente.** Cuando elija:
+
+1. Copiar sus tokens a `globals.css` y su marca a `src/config/brand.ts`
+2. Borrar `themes.ts`, `theme-switcher.tsx` y los dos scripts de captura
+3. Quitar el botón de la barra superior (`app-shell.tsx`) y el script de
+   dirección del `layout.tsx`
+4. `useBrand()` desaparece: `sidebar.tsx` y `brand-mark.tsx` pasan a leer
+   `BRAND` directamente
+
+Es temporal por diseño y está dicho en el propio archivo, para que nadie lo
+tome por arquitectura permanente.
 
 ---
 
@@ -140,6 +188,7 @@ Cosas que ya costaron tiempo y no deberían volver a costarlo:
 | **PowerShell corrompe UTF-8** al editar archivos | Usar herramientas de edición, nunca `Get-Content`+`Set-Content`. Detectar con `grep -rlP 'Ã©\|Ã¡\|Ã±' src` |
 | **curl en Git Bash** no envía bien acentos ni Ñ | Probar con `fetch` desde Node |
 | **Vercel bloquea deploys** si el autor del commit no es la cuenta conectada | El repo usa `git config user.email 297023832+000johanalfaro0@users.noreply.github.com`. No cambiarlo |
+| **El push no siempre despliega** | Desplegar con el CLI y verificar el `<title>` en producción. Ver riesgo 4 |
 | **El pool debe ser PEQUEÑO en serverless** (2) | Cada instancia abre el suyo; el total es `max × instancias` |
 | **Prisma guarda `timestamp` sin zona** | Para agrupar por día: `AT TIME ZONE 'UTC' AT TIME ZONE <zona>`. Centralizado en `localTime()` |
 | **Turbopack cachea rutas nuevas** | Si una página recién creada da 404 o error de manifiesto, borrar `.next` y reiniciar |
@@ -159,6 +208,10 @@ npx tsx scripts/reset-demo.ts --feedback     # limpiar anotaciones
 npx tsx scripts/purge-test-data.ts           # limpiar restos de tests
 npx tsx scripts/set-password.ts <correo>     # cambiar contraseña
 npx tsx scripts/screenshot-pantallas.ts      # verificar que todo carga
+
+npx tsx scripts/screenshot-direcciones.ts        # las 3 direcciones, inventario
+npx tsx scripts/screenshot-login-direcciones.ts  # las 3 direcciones, acceso
+# Contra producción: $env:APP_URL='https://erp-mx-theta.vercel.app'
 ```
 
 ---
