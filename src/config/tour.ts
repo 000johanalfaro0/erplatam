@@ -1,14 +1,20 @@
 /**
  * Guion del tutorial guiado (requisito 20).
  *
- * Se declara aquí, separado del componente que lo pinta, por dos motivos:
- * cambiar el texto de un paso no debe obligar a tocar lógica de interfaz, y
- * así el guion se puede leer de corrido para comprobar que cuenta una historia
- * coherente.
+ * ORDEN DELIBERADO: lo PRIMERO que se enseña no es cómo vender, es cómo
+ * ANOTAR sobre la pantalla.
  *
- * CRITERIO DE CONTENIDO: cada paso responde "¿por qué me importa esto?", no
- * "¿dónde está el botón?". Un tutorial que solo señala controles enseña a usar
- * una interfaz; uno que explica el porqué enseña a llevar el negocio con ella.
+ * Durante una demo, lo más valioso que puede hacer el cliente no es aprender
+ * el sistema: es decirnos qué le falta. Si termina el recorrido sabiendo
+ * vender pero sin saber que puede pegar una nota sobre cualquier cosa que no
+ * le cuadre, hemos perdido el motivo de la demo.
+ *
+ * Por eso los tres primeros pasos son la capa de anotaciones, y solo después
+ * viene el paseo por los módulos.
+ *
+ * El guion vive separado del componente que lo pinta: cambiar un texto no
+ * debe obligar a tocar lógica de interfaz, y así se puede leer de corrido
+ * para comprobar que cuenta una historia coherente.
  */
 
 export interface TourStep {
@@ -27,29 +33,56 @@ export interface TourStep {
 }
 
 export const TOUR_STEPS: TourStep[] = [
+  // ---------------------------------------------------------------------
+  // PARTE 1 — Cómo darnos feedback. Lo más importante de esta demo.
+  // ---------------------------------------------------------------------
   {
     target: null,
-    title: "Vamos a dar un recorrido",
-    body: "Son siete pasos y no llega a dos minutos. Puedes salir cuando quieras con la tecla Escape, y retomarlo después desde el mismo botón.",
+    route: "/",
+    title: "Bienvenido. Empecemos por lo más importante",
+    body: "Vas a usar este sistema con datos reales unos días. Lo que más nos sirve no es que lo uses bien: es que nos digas qué le falta, qué te estorba y qué harías distinto. Te enseño cómo en treinta segundos.",
   },
+  {
+    target: "[data-tour=feedback-boton]",
+    route: "/",
+    title: "Este botón es tu voz",
+    body: "Actívalo cuando algo no te cuadre. La pantalla se marca en ámbar para que sepas que estás anotando y no operando: mientras esté activo, los clics no ejecutan nada.",
+    action: "Pulsa “Modo feedback” para activarlo",
+  },
+  {
+    target: null,
+    route: "/",
+    title: "Haz clic en lo que quieras comentar",
+    body: "Con el modo activo, haz clic sobre cualquier cosa —un botón, una columna, un precio— y escribe qué cambiarías. La nota se queda pegada ahí, como un pósit, y la vemos exactamente donde tú la dejaste.",
+    action: "Dilo como lo dirías en voz alta. No hace falta ser técnico",
+  },
+  {
+    target: null,
+    route: "/",
+    title: "Y si falta algo que no existe, también",
+    body: "¿Quieres un botón que no está? ¿Una columna que no ves? Haz clic cerca y descríbelo. No hace falta que sepas si es posible: para eso estamos nosotros.",
+  },
+
+  // ---------------------------------------------------------------------
+  // PARTE 2 — Paseo por el sistema.
+  // ---------------------------------------------------------------------
   {
     target: "[data-tour=nav-dashboard]",
     route: "/",
-    title: "El panel responde cómo va el día",
-    body: "Ventas de hoy, del mes, gastos y ganancia estimada. Abajo, lo que hay que resurtir hoy y quién hizo qué. Nada está aquí por adorno: cada cifra contesta una pregunta que te haces a diario.",
+    title: "Ahora sí, el sistema",
+    body: "El panel responde cómo va el día: ventas de hoy, del mes, gastos y ganancia estimada. Abajo, lo que hay que resurtir y quién hizo qué. Nada está aquí por adorno.",
   },
   {
     target: "[data-tour=nav-sales]",
     route: "/",
     title: "Ventas es donde cobras",
     body: "Escaneas o buscas el producto, se arma el ticket y cobras. El sistema calcula el IVA y el cambio. Si tienes lector de código de barras, funciona sin tocar el ratón.",
-    action: "Haz clic en Ventas para verlo",
   },
   {
     target: "[data-tour=nav-inventory]",
     route: "/inventario",
     title: "El inventario se mueve solo",
-    body: "Cada venta descuenta, cada compra suma. No tienes que ajustar nada a mano. Lo que sí queda registrado es todo movimiento, con su motivo y quién lo hizo, para que puedas saber por qué falta algo.",
+    body: "Cada venta descuenta, cada compra suma. No ajustas nada a mano. Lo que sí queda registrado es todo movimiento, con su motivo y quién lo hizo, para que puedas saber por qué falta algo.",
   },
   {
     target: "[data-tour=nav-purchases]",
@@ -61,16 +94,30 @@ export const TOUR_STEPS: TourStep[] = [
     target: "[data-tour=nav-reports]",
     route: "/inventario",
     title: "Reportes para decidir",
-    body: "Cuánto vendiste, qué productos te dejan más ganancia (no los que más se venden: los que más dejan), en qué se te va el dinero y cuánto tienes parado en el almacén. Todo se puede exportar a Excel.",
+    body: "Cuánto vendiste, qué productos te dejan más ganancia (no los que más se venden: los que más dejan), en qué se te va el dinero y cuánto tienes parado en el almacén. Todo se exporta a Excel.",
   },
   {
-    target: "[data-tour=nav-feedback]",
+    target: "[data-tour=feedback-boton]",
     route: "/inventario",
-    title: "Y lo más importante: dinos qué falta",
-    body: "Activa el Modo feedback en la barra de abajo y haz clic derecho sobre cualquier cosa que quieras cambiar. Puedes incluso dibujar dónde quieres un botón que no existe. Todo lo que anotes nos llega con la pantalla exacta que estabas viendo.",
-    action: "Es la herramienta que hace útil esta demo",
+    title: "Recuerda: cualquier cosa, anótala",
+    body: "No te guardes nada. Si algo te parece raro, lento, feo o incompleto, pégale una nota. Eso es exactamente lo que hace útil esta demo.",
+    action: "Puedes volver a ver este recorrido cuando quieras, con el botón 🎓",
   },
 ];
 
-/** Clave en localStorage. Recuerda si ya se completó, para no repetirlo. */
+/**
+ * Clave en localStorage, a la que se añade el id del usuario.
+ *
+ * Se guarda por usuario y no de forma global para que, si dos personas usan
+ * el mismo equipo, la segunda también vea el recorrido.
+ *
+ * LIMITACIÓN CONOCIDA: al ser localStorage, es por navegador. Un usuario que
+ * entre desde otro equipo volverá a ver el tutorial. Para la demo es
+ * aceptable y evita una migración; la solución de producción es un campo
+ * `onboardedAt` en la tabla de usuarios.
+ */
 export const TOUR_STORAGE_KEY = "erp-tour-completado";
+
+export function tourStorageKey(userId: string): string {
+  return `${TOUR_STORAGE_KEY}:${userId}`;
+}

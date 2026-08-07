@@ -378,6 +378,8 @@ export function FeedbackLayer() {
             size="sm"
             onClick={() => setActivo(true)}
             className="shadow-overlay"
+            // Ancla del tutorial: el primer paso señala este botón.
+            data-tour="feedback-boton"
           >
             <MessageSquarePlus />
             Modo feedback

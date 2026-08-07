@@ -4,8 +4,9 @@ import { ArrowLeft, ArrowRight, GraduationCap, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 
+import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
-import { TOUR_STEPS, TOUR_STORAGE_KEY } from "@/config/tour";
+import { TOUR_STEPS, tourStorageKey } from "@/config/tour";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,6 +49,7 @@ export function GuidedTour() {
   const [rect, setRect] = React.useState<Rect | null>(null);
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useSession();
 
   const step = TOUR_STEPS[index];
   const isLast = index === TOUR_STEPS.length - 1;
@@ -124,6 +126,43 @@ export function GuidedTour() {
     setOpen(true);
   }
 
+  /**
+   * Arranque automático en el primer acceso.
+   *
+   * Lo primero que ve el cliente al entrar por primera vez es el recorrido, y
+   * lo primero del recorrido es cómo dejarnos anotaciones. Si tuviera que
+   * descubrir el botón del birrete por su cuenta, casi nadie lo haría.
+   *
+   * Se espera un momento antes de abrir: el layout y la barra del modo
+   * feedback tienen que existir para que el foco pueda señalarlos. Sin esa
+   * espera, el segundo paso apuntaría a un elemento que aún no está.
+   */
+  React.useEffect(() => {
+    let cancelado = false;
+
+    let yaVisto = true;
+    try {
+      yaVisto = localStorage.getItem(tourStorageKey(user.id)) === "1";
+    } catch {
+      // Si el almacenamiento está bloqueado no se autoarranca: es preferible
+      // no abrirlo a abrirlo en cada carga de página.
+      return;
+    }
+
+    if (yaVisto) return;
+
+    const timer = setTimeout(() => {
+      if (!cancelado) start();
+    }, 900);
+
+    return () => {
+      cancelado = true;
+      clearTimeout(timer);
+    };
+    // Solo al montar: no debe reabrirse al navegar entre pantallas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
+
   function next() {
     if (isLast) {
       finish();
@@ -136,7 +175,7 @@ export function GuidedTour() {
     setOpen(false);
     setIndex(0);
     try {
-      localStorage.setItem(TOUR_STORAGE_KEY, "1");
+      localStorage.setItem(tourStorageKey(user.id), "1");
     } catch {
       // Si el almacenamiento está bloqueado, el tutorial simplemente volverá a
       // ofrecerse. No es motivo para romper nada.
