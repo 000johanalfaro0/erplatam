@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
   LayoutDashboard,
   MessageSquareDot,
@@ -8,6 +9,7 @@ import {
   Settings,
   ShoppingCart,
   Truck,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
@@ -143,6 +145,28 @@ export const NAVIGATION: NavSection[] = [
         tourId: "nav-feedback",
       },
       {
+        // Se llamaba "Configuración", y era el error de nombre más caro que
+        // teníamos: quien buscaba cambiar el IVA hacía clic aquí y se
+        // encontraba un cuestionario. Ahora "Configuración" es lo que dice
+        // ser, y esto se llama por lo que es.
+        href: "/cuestionario",
+        label: "Cuestionario",
+        icon: ClipboardCheck,
+        permission: PERMISSIONS.DISCOVERY_WRITE,
+        keywords: [
+          "descubrimiento",
+          "análisis del negocio",
+          "preguntas",
+          "necesidades",
+        ],
+        tourId: "nav-questionnaire",
+      },
+    ],
+  },
+  {
+    label: "Administración",
+    items: [
+      {
         href: "/configuracion",
         label: "Configuración",
         icon: Settings,
@@ -151,12 +175,20 @@ export const NAVIGATION: NavSection[] = [
           "ajustes",
           "impuestos",
           "iva",
+          "moneda",
+          "zona horaria",
+          "métodos de pago",
           "negocio",
-          "usuarios",
-          "cuestionario",
-          "análisis del negocio",
         ],
         tourId: "nav-settings",
+      },
+      {
+        href: "/usuarios",
+        label: "Usuarios",
+        icon: UserCog,
+        permission: PERMISSIONS.USERS_READ,
+        keywords: ["personal", "cajeros", "empleados", "roles", "permisos"],
+        tourId: "nav-users",
       },
     ],
   },

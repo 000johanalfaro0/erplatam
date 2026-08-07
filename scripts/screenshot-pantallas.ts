@@ -18,9 +18,11 @@ const PANTALLAS = [
   { ruta: "/gastos", titulo: "Gastos", archivo: "20-gastos" },
   { ruta: "/clientes", titulo: "Clientes", archivo: "21-clientes" },
   { ruta: "/proveedores", titulo: "Proveedores", archivo: "22-proveedores" },
-  { ruta: "/configuracion", titulo: "Configuración y análisis del negocio", archivo: "23-cuestionario" },
+  { ruta: "/cuestionario", titulo: "Configuración y análisis del negocio", archivo: "23-cuestionario" },
   { ruta: "/reportes", titulo: "Reportes", archivo: "24-reportes" },
   { ruta: "/auditoria", titulo: "Auditoría", archivo: "25-auditoria" },
+  { ruta: "/configuracion", titulo: "Configuración", archivo: "26-configuracion" },
+  { ruta: "/usuarios", titulo: "Usuarios", archivo: "27-usuarios" },
 ];
 
 async function main() {
@@ -46,6 +48,13 @@ async function main() {
   await page.getByLabel("Contraseña").fill(process.env.SEED_ADMIN_PASSWORD ?? "");
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
   await page.waitForURL(`${BASE_URL}/`, { timeout: 15_000 });
+
+  // El tutorial arranca solo en el primer acceso y lleva la navegación al
+  // panel, así que se cierra antes de recorrer nada. Sin esto, las pantallas
+  // que se visiten mientras está abierto salen todas siendo el panel.
+  await page.waitForTimeout(1800);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
 
   for (const pantalla of PANTALLAS) {
     await page.goto(`${BASE_URL}${pantalla.ruta}`, { waitUntil: "networkidle" });
