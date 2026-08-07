@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { FeedbackMode } from "@/modules/feedback/feedback-mode";
+import { FeedbackLayer } from "@/modules/feedback/feedback-layer";
 import { GuidedTour } from "@/modules/tour/guided-tour";
 
 import { useSession } from "../session-provider";
@@ -221,11 +221,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/*
-        Modo feedback: vive fuera del <main> para que su barra flotante y sus
-        superposiciones no se vean afectadas por el desplazamiento del
-        contenido, y para poder capturar la pantalla completa.
+        Capa de anotaciones. Vive fuera del <main> para que su barra flotante
+        no se vea afectada por el desplazamiento del contenido.
       */}
-      <FeedbackMode />
+      <FeedbackLayer />
 
       {/* Nombre del negocio para lectores de pantalla al entrar */}
       <span className="sr-only">{business.name}</span>

@@ -1,0 +1,465 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Check,
+  MessageSquarePlus,
+  MousePointerClick,
+  Trash2,
+  X,
+} from "lucide-react";
+import { usePathname } from "next/navigation";
+import * as React from "react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { ApiError, api, type Paginated } from "@/lib/api";
+import {
+  type ElementAnchor,
+  crearAncla,
+  deserializarAncla,
+  resolverAncla,
+  serializarAncla,
+} from "@/lib/anchor";
+import { cn } from "@/lib/utils";
+
+/**
+ * CAPA DE ANOTACIONES (requisito 21, rediseñado)
+ * ===========================================================================
+ * Una capa que vive ENCIMA del software, como pósits pegados a la pantalla.
+ *
+ * Lo que cambió respecto a la primera versión: aquella era un formulario que
+ * se abría y se cerraba, y las anotaciones desaparecían en una bandeja. Esta
+ * las mantiene visibles sobre la interfaz, ancladas a lo que comentan.
+ *
+ * COMPORTAMIENTO ACORDADO:
+ *   - Notas con el texto SIEMPRE VISIBLE, no pins que haya que abrir.
+ *   - Visibles SOLO con el modo activo: el sistema se ve limpio el resto del
+ *     tiempo, y el cliente puede enseñarlo a otras personas sin ruido.
+ *   - PEGADAS AL ELEMENTO: la nota sigue al botón o campo aunque la tabla
+ *     tenga otras filas o cambie el tamaño de ventana.
+ *   - Sin hilos de conversación: se anota y se marca el estado.
+ *
+ * EL PROBLEMA DIFÍCIL es el anclaje, y vive en `lib/anchor.ts`. Aquí solo se
+ * resuelve la posición y se dibuja.
+ */
+
+interface Anotacion {
+  id: string;
+  title: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  status: string;
+  route: string;
+  elementLabel: string | null;
+  elementPath: string | null;
+  createdBy: { id: string; name: string } | null;
+}
+
+interface NotaUbicada {
+  anotacion: Anotacion;
+  ancla: ElementAnchor;
+  /** Posición del elemento anclado, en coordenadas de página. */
+  rect: { top: number; left: number; width: number; height: number } | null;
+}
+
+const ANCHO_NOTA = 224;
+const SEPARACION = 12;
+
+export function FeedbackLayer() {
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+
+  const [activo, setActivo] = React.useState(false);
+  const [borrador, setBorrador] = React.useState<{
+    ancla: ElementAnchor;
+    texto: string;
+  } | null>(null);
+  const [ubicadas, setUbicadas] = React.useState<NotaUbicada[]>([]);
+
+  // --- Anotaciones de ESTA pantalla ---
+  const { data } = useQuery({
+    queryKey: ["feedback-layer", pathname],
+    queryFn: () =>
+      api.get<Paginated<Anotacion>>("/feedback", {
+        route: pathname,
+        pageSize: 50,
+      }),
+    enabled: activo,
+    // Se refresca al volver a la pestaña: si otra persona anotó algo mientras
+    // tanto, debe aparecer.
+    staleTime: 10_000,
+  });
+
+  /**
+   * Recalcula dónde va cada nota.
+   *
+   * Se ejecuta al cargar, al hacer scroll, al cambiar el tamaño de la ventana
+   * y cuando el contenido cambia. Sin esto, las notas se quedarían flotando
+   * en el sitio donde estaban cuando se abrió la pantalla.
+   */
+  const recolocar = React.useCallback(() => {
+    if (!activo || !data) {
+      setUbicadas([]);
+      return;
+    }
+
+    const resultado: NotaUbicada[] = [];
+
+    for (const anotacion of data.items) {
+      const ancla = deserializarAncla(anotacion.elementPath);
+      if (!ancla) {
+        resultado.push({ anotacion, ancla: { label: "Sin ubicación" }, rect: null });
+        continue;
+      }
+
+      const el = resolverAncla(ancla);
+
+      /*
+       * Coordenadas de VIEWPORT, no de página, y posicionamiento `fixed`.
+       *
+       * En este layout quien hace scroll no es la ventana sino el contenedor
+       * <main>. Con `position: absolute` y coordenadas de página las notas se
+       * quedarían flotando en el sitio equivocado en cuanto se desplazara el
+       * contenido.
+       *
+       * `getBoundingClientRect` ya da coordenadas de viewport, así que basta
+       * con recalcular en cada scroll — que es lo que hace el listener con
+       * `capture: true`, para capturar el scroll de cualquier contenedor.
+       */
+      const b = el?.getBoundingClientRect();
+
+      resultado.push({
+        anotacion,
+        ancla,
+        rect:
+          b && b.width > 0
+            ? { top: b.top, left: b.left, width: b.width, height: b.height }
+            : null,
+      });
+    }
+
+    setUbicadas(resultado);
+  }, [activo, data]);
+
+  React.useEffect(() => {
+    if (!activo) return;
+
+    recolocar();
+
+    // Un poco después: el contenido puede tardar en pintarse.
+    const timer = setTimeout(recolocar, 400);
+
+    window.addEventListener("scroll", recolocar, true);
+    window.addEventListener("resize", recolocar);
+
+    // Reacciona a cambios de contenido: filtrar una tabla mueve los elementos.
+    const observer = new MutationObserver(() => recolocar());
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", recolocar, true);
+      window.removeEventListener("resize", recolocar);
+      observer.disconnect();
+    };
+  }, [activo, recolocar]);
+
+  // --- Crear anotación: clic sobre cualquier elemento ---
+  React.useEffect(() => {
+    if (!activo || borrador) return;
+
+    function onClick(event: MouseEvent) {
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-feedback-ui]")) return;
+
+      // Se intercepta el clic para que no active el botón señalado.
+      event.preventDefault();
+      event.stopPropagation();
+
+      setBorrador({ ancla: crearAncla(target), texto: "" });
+    }
+
+    // `capture: true` para llegar antes que los manejadores de la aplicación.
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [activo, borrador]);
+
+  const guardar = useMutation({
+    mutationFn: () => {
+      if (!borrador) throw new Error("sin borrador");
+      return api.post("/feedback", {
+        kind: "COMMENT",
+        priority: "MEDIUM",
+        title: borrador.texto.trim(),
+        route: pathname,
+        elementLabel: borrador.ancla.label,
+        elementPath: serializarAncla(borrador.ancla),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["feedback-layer"] });
+      queryClient.invalidateQueries({ queryKey: ["feedback"] });
+      setBorrador(null);
+      toast.success("Nota pegada");
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "No pudimos guardar la nota.",
+      );
+    },
+  });
+
+  const descartar = useMutation({
+    mutationFn: (id: string) => api.patch(`/feedback/${id}`, { status: "DISCARDED" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["feedback-layer"] });
+      queryClient.invalidateQueries({ queryKey: ["feedback"] });
+      toast.success("Nota quitada");
+    },
+    onError: () => toast.error("No pudimos quitar la nota."),
+  });
+
+  /**
+   * Coloca la nota junto a su elemento, evitando que se salgan por la derecha
+   * y que se solapen entre sí.
+   *
+   * El apilado importa: dos anotaciones sobre elementos cercanos quedarían una
+   * encima de otra y solo se leería la última.
+   */
+  const posiciones = React.useMemo(() => {
+    const usadas: { top: number; bottom: number; left: number }[] = [];
+
+    return ubicadas.map((nota) => {
+      if (!nota.rect) return null;
+
+      const cabeDerecha =
+        nota.rect.left + nota.rect.width + ANCHO_NOTA + SEPARACION <
+        window.innerWidth;
+
+      let left = cabeDerecha
+        ? nota.rect.left + nota.rect.width + SEPARACION
+        : Math.max(8, nota.rect.left - ANCHO_NOTA - SEPARACION);
+
+      let top = nota.rect.top;
+
+      // Desplaza hacia abajo mientras choque con otra nota ya colocada.
+      let intentos = 0;
+      while (
+        intentos < 12 &&
+        usadas.some(
+          (u) =>
+            Math.abs(u.left - left) < ANCHO_NOTA &&
+            top < u.bottom + 6 &&
+            top + 70 > u.top,
+        )
+      ) {
+        top += 76;
+        intentos++;
+      }
+
+      usadas.push({ top, bottom: top + 70, left });
+      return { top, left };
+    });
+  }, [ubicadas]);
+
+  const huerfanas = ubicadas.filter((n) => !n.rect);
+
+  return (
+    <>
+      {/* --- Notas ancladas --- */}
+      {activo &&
+        ubicadas.map((nota, i) => {
+          const pos = posiciones[i];
+          if (!pos || !nota.rect) return null;
+
+          return (
+            <React.Fragment key={nota.anotacion.id}>
+              {/* Recuadro sobre el elemento comentado */}
+              <div
+                data-feedback-ui
+                aria-hidden
+                className="pointer-events-none fixed z-90 rounded-sm ring-2 ring-warning/60"
+                style={{
+                  top: nota.rect.top - 3,
+                  left: nota.rect.left - 3,
+                  width: nota.rect.width + 6,
+                  height: nota.rect.height + 6,
+                }}
+              />
+
+              {/* La nota */}
+              <div
+                data-feedback-ui
+                className="fixed z-90 w-56 rounded-md border border-warning/40 bg-warning-soft p-2.5 shadow-raised"
+                style={{ top: pos.top, left: pos.left }}
+              >
+                <p className="text-[12.5px] leading-snug text-ink">
+                  {nota.anotacion.title}
+                </p>
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-subtle">
+                  <span className="truncate">
+                    {nota.anotacion.createdBy?.name ?? "—"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => descartar.mutate(nota.anotacion.id)}
+                    aria-label={`Quitar la nota "${nota.anotacion.title}"`}
+                    className="ml-auto shrink-0 rounded-xs p-0.5 transition-colors hover:text-danger"
+                  >
+                    <Trash2 className="size-3" aria-hidden />
+                  </button>
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+
+      {/* --- Nota en edición --- */}
+      {activo && borrador && (
+        <div
+          data-feedback-ui
+          className="fixed left-1/2 top-1/2 z-100 w-72 -translate-x-1/2 -translate-y-1/2 rounded-md border border-warning/50 bg-warning-soft p-3 shadow-overlay"
+        >
+          <p className="mb-2 text-[11px] font-medium text-ink-muted">
+            {borrador.ancla.label}
+          </p>
+          <textarea
+            autoFocus
+            value={borrador.texto}
+            onChange={(e) => setBorrador({ ...borrador, texto: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setBorrador(null);
+              // Enter guarda; Shift+Enter hace salto de línea. Anotar debe
+              // costar un gesto, no tres.
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (borrador.texto.trim().length >= 3) guardar.mutate();
+              }
+            }}
+            placeholder="¿Qué cambiarías de esto?"
+            aria-label="Texto de la nota"
+            rows={3}
+            className="w-full resize-none rounded-sm border border-warning/40 bg-surface p-2 text-[13px] text-ink outline-none placeholder:text-ink-subtle focus-visible:border-accent"
+          />
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="text-[11px] text-ink-subtle">Enter para pegar</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setBorrador(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={guardar.isPending}
+              disabled={borrador.texto.trim().length < 3}
+              onClick={() => guardar.mutate()}
+            >
+              <Check />
+              Pegar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* --- Barra de control --- */}
+      <div
+        data-feedback-ui
+        className="fixed bottom-4 left-1/2 z-100 -translate-x-1/2"
+      >
+        {!activo ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setActivo(true)}
+            className="shadow-overlay"
+          >
+            <MessageSquarePlus />
+            Modo feedback
+          </Button>
+        ) : (
+          <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-surface-raised px-2 py-1.5 shadow-overlay">
+            <span className="flex items-center gap-1.5 text-[12px] font-medium text-warning">
+              <span className="size-1.5 animate-pulse rounded-full bg-warning" />
+              {ubicadas.length > 0
+                ? `${ubicadas.length} ${ubicadas.length === 1 ? "nota" : "notas"} aquí`
+                : "Sin notas aquí"}
+            </span>
+
+            <span className="hidden items-center gap-1 text-[12px] text-ink-subtle sm:flex">
+              <MousePointerClick className="size-3" aria-hidden />
+              haz clic en lo que quieras comentar
+            </span>
+
+            {huerfanas.length > 0 && (
+              <span
+                className="text-[11px] text-ink-subtle"
+                title="Estas notas señalaban algo que ya no está en la pantalla"
+              >
+                · {huerfanas.length} sin ubicar
+              </span>
+            )}
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Salir del modo feedback"
+              onClick={() => {
+                setActivo(false);
+                setBorrador(null);
+              }}
+            >
+              <X />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* --- Notas huérfanas: su elemento ya no existe --- */}
+      {activo && huerfanas.length > 0 && (
+        <div
+          data-feedback-ui
+          className="fixed bottom-16 right-4 z-90 w-60 rounded-md border border-line bg-surface-raised p-2.5 shadow-overlay"
+        >
+          <p className="mb-1.5 text-[11px] font-medium text-ink-muted">
+            Notas sin ubicar
+          </p>
+          <p className="mb-2 text-[11px] leading-snug text-ink-subtle">
+            Señalaban algo que ya no está en esta pantalla.
+          </p>
+          <ul className="space-y-1.5">
+            {huerfanas.map((n) => (
+              <li
+                key={n.anotacion.id}
+                className="rounded-sm bg-surface-sunken px-2 py-1.5 text-[12px] text-ink"
+              >
+                {n.anotacion.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/*
+        Atenúa ligeramente la interfaz mientras el modo está activo, para que
+        se note que estás anotando y no operando. No bloquea: el clic tiene que
+        llegar a los elementos para poder señalarlos.
+      */}
+      {activo && (
+        <div
+          data-feedback-ui
+          aria-hidden
+          className={cn(
+            "pointer-events-none fixed inset-0 z-80",
+            "ring-2 ring-inset ring-warning/30",
+          )}
+        />
+      )}
+    </>
+  );
+}
