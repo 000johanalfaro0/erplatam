@@ -61,11 +61,14 @@ export interface ReferenceData {
  * las pantallas necesitan. Sin caché, abrir cada formulario dispararía una
  * petición idéntica.
  */
-export function useReference() {
+export function useReference(initialData?: ReferenceData) {
   return useQuery({
     queryKey: queryKeys.reference,
     queryFn: () => api.get<ReferenceData>("/reference"),
     staleTime: 5 * 60_000,
+    // Cuando la página es un componente de servidor, estos catálogos llegan
+    // ya resueltos y se evita una petición adicional al montar.
+    initialData,
   });
 }
 
@@ -115,7 +118,10 @@ export interface ProductFilters {
   sortDir?: "asc" | "desc";
 }
 
-export function useProducts(filters: ProductFilters) {
+export function useProducts(
+  filters: ProductFilters,
+  initialData?: Paginated<Product>,
+) {
   return useQuery({
     queryKey: queryKeys.products(filters),
     queryFn: () =>
@@ -133,6 +139,9 @@ export function useProducts(filters: ProductFilters) {
     // lugar de parpadear a un esqueleto. Al escribir en el buscador se nota
     // muchísimo.
     placeholderData: (previous) => previous,
+    // Datos de la primera carga, resueltos en el servidor dentro del mismo
+    // viaje que la página. Evita el segundo viaje y el esqueleto inicial.
+    initialData,
   });
 }
 
