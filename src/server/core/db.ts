@@ -33,25 +33,31 @@ function createClient(): PrismaClient {
   const adapter = new PrismaPg({
     connectionString: env.DATABASE_URL,
     /*
-     * TAMAÑO DEL POOL — medido, no elegido al azar.
+     * TAMAÑO DEL POOL — medido en producción, no elegido al azar.
      *
-     * Con `max: 10`, una prueba de 10 ventas simultáneas sobre el mismo
-     * producto hacía caer la base con "Failed to connect to upstream
-     * database": el plan gestionado limita las conexiones concurrentes, y
-     * abrir diez a la vez lo desborda.
+     * En serverless el pool debe ser PEQUEÑO, justo al revés de lo que uno
+     * espera. El motivo: cada instancia de función abre su propio pool, así
+     * que el total de conexiones contra la base es `max × instancias
+     * activas`. Vercel levanta instancias según el tráfico, sin avisar.
      *
-     * Bajarlo a 5 cambia el modo de fallo por uno mucho mejor: en lugar de
-     * que la base rechace la conexión, las peticiones extra ESPERAN en la
-     * cola local del pool. Como las transacciones de venta duran decenas de
-     * milisegundos, esa espera es imperceptible.
+     * Historial de este número, todo medido:
      *
-     * En serverless importa el doble: cada instancia abre su propio pool, así
-     * que el total es `max × instancias activas`. Un pool pequeño es lo único
-     * que evita agotar el límite del proveedor bajo carga.
+     *   max: 10 → la prueba de 10 cajas simultáneas tumbaba la base con
+     *             "Failed to connect to upstream database".
+     *   max: 5  → arreglaba los tests locales, pero en PRODUCCIÓN el panel
+     *             devolvía 500 con `too many connections for role` (SQLSTATE
+     *             53300): el panel lanza 9 consultas en paralelo, y con
+     *             varias instancias vivas se agotaba el cupo del plan.
+     *   max: 2  → en serverless. Las consultas de una misma petición hacen
+     *             cola local, que cuesta milisegundos, en lugar de competir
+     *             por un cupo global que cuesta un error 500.
      *
-     * Configurable por si el entorno de destino admite más.
+     * En local se permite un pool mayor: hay un solo proceso y los tests de
+     * concurrencia necesitan paralelismo real.
      */
-    max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+    max: Number(
+      process.env.DATABASE_POOL_MAX ?? (process.env.VERCEL ? 2 : 5),
+    ),
     /*
      * Debe ser COHERENTE con el `maxWait` de las transacciones (30 s, ver
      * `core/tx.ts`). Ambos miden la misma espera: obtener una conexión libre.
