@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { FeedbackMode } from "@/modules/feedback/feedback-mode";
+import { GuidedTour } from "@/modules/tour/guided-tour";
 
 import { useSession } from "../session-provider";
 import { Button } from "../ui/button";
@@ -139,6 +140,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <GlobalSearch />
 
           <div className="ml-auto flex items-center gap-1">
+            <GuidedTour />
+
             <Button
               variant="ghost"
               size="icon-sm"

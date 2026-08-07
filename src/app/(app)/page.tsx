@@ -13,6 +13,7 @@ import {
   PageHeader,
 } from "@/components/ui/surface";
 import { Stat } from "@/components/ui/stat";
+import { describeAuditAction } from "@/lib/audit-labels";
 import { dateRelative, money, moneyCompact, percent, quantityWithUnit } from "@/lib/format";
 import { requireContext } from "@/server/http/context";
 import { getCurrentUser } from "@/server/modules/auth";
@@ -232,7 +233,7 @@ export default async function DashboardPage() {
                 <span className="min-w-0 flex-1 truncate text-ink">
                   <span className="font-medium">{entry.userName ?? "Sistema"}</span>{" "}
                   <span className="text-ink-muted">
-                    {describeAction(entry.action)}
+                    {describeAuditAction(entry.action)}
                   </span>
                 </span>
                 <span className="shrink-0 text-[12px] text-ink-subtle">
@@ -250,37 +251,4 @@ export default async function DashboardPage() {
 /** "1 venta" / "3 ventas". Un "1 ventas" delata software descuidado. */
 function pluralize(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-/**
- * Traduce el verbo técnico de la bitácora a español llano.
- *
- * La bitácora guarda `sale.create` porque es estable y filtrable; el usuario
- * lee "registró una venta". Los datos se guardan para la máquina y se
- * presentan para la persona.
- */
-function describeAction(action: string): string {
-  const map: Record<string, string> = {
-    "auth.login": "inició sesión",
-    "auth.logout": "cerró sesión",
-    "auth.login_failed": "falló al iniciar sesión",
-    "sale.create": "registró una venta",
-    "sale.void": "canceló una venta",
-    "product.create": "dio de alta un producto",
-    "product.update": "editó un producto",
-    "product.delete": "eliminó un producto",
-    "inventory.adjust": "ajustó el inventario",
-    "inventory.entry": "registró una entrada de mercancía",
-    "inventory.exit": "registró una salida de mercancía",
-    "purchase.create": "registró una compra",
-    "purchase.void": "canceló una compra",
-    "expense.create": "registró un gasto",
-    "customer.create": "dio de alta un cliente",
-    "supplier.create": "dio de alta un proveedor",
-    "settings.update": "cambió la configuración",
-    "user.create": "creó un usuario",
-    "user.update": "modificó un usuario",
-  };
-
-  return map[action] ?? action;
 }
