@@ -20,6 +20,16 @@ export const queryKeys = {
   sales: (filters?: unknown) => ["sales", filters] as const,
   sale: (id: string) => ["sale", id] as const,
   movements: (filters?: unknown) => ["movements", filters] as const,
+  customers: (filters?: unknown) => ["customers", filters] as const,
+  customer: (id: string) => ["customer", id] as const,
+  customerHistory: (id: string, filters?: unknown) =>
+    ["customer", id, "history", filters] as const,
+  suppliers: (filters?: unknown) => ["suppliers", filters] as const,
+  expenses: (filters?: unknown) => ["expenses", filters] as const,
+  purchases: (filters?: unknown) => ["purchases", filters] as const,
+  purchase: (id: string) => ["purchase", id] as const,
+  audit: (filters?: unknown) => ["audit", filters] as const,
+  reports: (filters?: unknown) => ["reports", filters] as const,
   dashboard: ["dashboard"] as const,
 } as const;
 
@@ -175,3 +185,347 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   SALE_VOID: "Cancelación de venta",
   PURCHASE_VOID: "Cancelación de compra",
 };
+
+// --- Ventas ----------------------------------------------------------------
+
+export interface Sale {
+  id: string;
+  folio: string;
+  status: "COMPLETED" | "VOIDED";
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
+  createdAt: string;
+  customer: { id: string; name: string } | null;
+  user: { id: string; name: string };
+  _count: { items: number };
+  payments: { method: { code: string; name: string } }[];
+}
+
+export interface SaleDetail {
+  id: string;
+  folio: string;
+  status: "COMPLETED" | "VOIDED";
+  subtotalCents: number;
+  discountCents: number;
+  taxCents: number;
+  totalCents: number;
+  notes: string | null;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  customer: { id: string; name: string; rfc: string | null } | null;
+  user: { id: string; name: string };
+  items: {
+    id: string;
+    productId: string;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    unitPriceCents: number;
+    priceIncludesTax: boolean;
+    discountCents: number;
+    taxRateBps: number;
+    subtotalCents: number;
+    taxCents: number;
+    totalCents: number;
+  }[];
+  payments: {
+    id: string;
+    amountCents: number;
+    receivedCents: number | null;
+    changeCents: number | null;
+    reference: string | null;
+    method: { id: string; code: string; name: string };
+  }[];
+}
+
+export interface SaleFilters {
+  search?: string;
+  status?: string;
+  customerId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}
+
+export function useSales(filters: SaleFilters) {
+  return useQuery({
+    queryKey: queryKeys.sales(filters),
+    queryFn: () => api.get<Paginated<Sale>>("/sales", filters),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSale(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.sale(id ?? ""),
+    queryFn: () => api.get<SaleDetail>(`/sales/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
+// --- Clientes --------------------------------------------------------------
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  rfc: string | null;
+  legalName: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface CustomerFilters {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}
+
+export function useCustomers(filters: CustomerFilters) {
+  return useQuery({
+    queryKey: queryKeys.customers(filters),
+    queryFn: () => api.get<Paginated<Customer>>("/customers", filters),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export interface CustomerHistory {
+  customer: { id: string; name: string };
+  sales: {
+    id: string;
+    folio: string;
+    totalCents: number;
+    createdAt: string;
+    _count: { items: number };
+  }[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: {
+    totalSpentCents: number;
+    averageTicketCents: number;
+    purchaseCount: number;
+    lastPurchaseAt: string | null;
+  };
+}
+
+export function useCustomerHistory(
+  id: string | null,
+  filters: { page?: number; pageSize?: number },
+) {
+  return useQuery({
+    queryKey: queryKeys.customerHistory(id ?? "", filters),
+    queryFn: () =>
+      api.get<CustomerHistory>(`/customers/${id}/history`, filters),
+    enabled: Boolean(id),
+  });
+}
+
+// --- Proveedores -----------------------------------------------------------
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  rfc: string | null;
+  address: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface SupplierFilters {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}
+
+export function useSuppliers(filters: SupplierFilters) {
+  return useQuery({
+    queryKey: queryKeys.suppliers(filters),
+    queryFn: () => api.get<Paginated<Supplier>>("/suppliers", filters),
+    placeholderData: (previous) => previous,
+  });
+}
+
+// --- Gastos ----------------------------------------------------------------
+
+export interface Expense {
+  id: string;
+  description: string;
+  amountCents: number;
+  spentAt: string;
+  reference: string | null;
+  notes: string | null;
+  createdAt: string;
+  category: { id: string; name: string; color: string | null } | null;
+  method: { id: string; code: string; name: string } | null;
+  user: { id: string; name: string };
+}
+
+export interface ExpenseFilters {
+  search?: string;
+  categoryId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}
+
+export function useExpenses(filters: ExpenseFilters) {
+  return useQuery({
+    queryKey: queryKeys.expenses(filters),
+    queryFn: () =>
+      api.get<Paginated<Expense> & { totalAmountCents: number }>(
+        "/expenses",
+        filters,
+      ),
+    placeholderData: (previous) => previous,
+  });
+}
+
+// --- Compras ---------------------------------------------------------------
+
+export interface Purchase {
+  id: string;
+  folio: string;
+  status: "DRAFT" | "RECEIVED" | "VOIDED";
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
+  invoiceNumber: string | null;
+  notes: string | null;
+  purchasedAt: string;
+  createdAt: string;
+  supplier: { id: string; name: string } | null;
+  user: { id: string; name: string };
+  _count: { items: number };
+}
+
+export interface PurchaseDetail {
+  id: string;
+  folio: string;
+  status: "DRAFT" | "RECEIVED" | "VOIDED";
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
+  invoiceNumber: string | null;
+  notes: string | null;
+  purchasedAt: string;
+  createdAt: string;
+  voidedAt: string | null;
+  voidReason: string | null;
+  supplier: { id: string; name: string } | null;
+  user: { id: string; name: string };
+  items: {
+    id: string;
+    productId: string;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    unitCostCents: number;
+    taxRateBps: number;
+    subtotalCents: number;
+    taxCents: number;
+    totalCents: number;
+  }[];
+}
+
+export interface PurchaseFilters {
+  search?: string;
+  status?: string;
+  supplierId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}
+
+export function usePurchases(filters: PurchaseFilters) {
+  return useQuery({
+    queryKey: queryKeys.purchases(filters),
+    queryFn: () => api.get<Paginated<Purchase>>("/purchases", filters),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function usePurchase(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.purchase(id ?? ""),
+    queryFn: () => api.get<PurchaseDetail>(`/purchases/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
+// --- Auditoría -------------------------------------------------------------
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  userName: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface AuditFilters {
+  action?: string;
+  entityType?: string;
+  userId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export function useAudit(filters: AuditFilters) {
+  return useQuery({
+    queryKey: queryKeys.audit(filters),
+    queryFn: () => api.get<Paginated<AuditEntry>>("/audit", filters),
+    placeholderData: (previous) => previous,
+  });
+}
+
+// --- Reportes --------------------------------------------------------------
+
+export interface ReportData {
+  salesByDay: { date: string; totalCents: number; count: number }[];
+  topProducts: {
+    productId: string;
+    productName: string;
+    totalQuantity: number;
+    totalCents: number;
+  }[];
+  expensesByCategory: { categoryName: string; totalCents: number }[];
+  summary: {
+    totalSalesCents: number;
+    totalExpensesCents: number;
+    grossProfitCents: number;
+    salesCount: number;
+    averageTicketCents: number;
+  };
+}
+
+export function useReports(filters: { from?: string; to?: string; period?: string }) {
+  return useQuery({
+    queryKey: queryKeys.reports(filters),
+    queryFn: () => api.get<ReportData>("/reports", filters),
+    placeholderData: (previous) => previous,
+  });
+}

@@ -143,10 +143,15 @@ export function handleApiError(error: unknown): NextResponse<ApiErrorBody> {
  *
  * Se usa así:
  *   export const POST = route(async (request) => { ... });
+ *
+ * El tipo de retorno es `Response` y no `NextResponse` a propósito: las rutas
+ * que devuelven una descarga (CSV) construyen una `Response` estándar, sin
+ * necesitar las extensiones de Next. Restringirlo a `NextResponse` obligaría a
+ * envolverla artificialmente solo para satisfacer al compilador.
  */
 export function route<Args extends unknown[]>(
-  handler: (...args: Args) => Promise<NextResponse>,
-): (...args: Args) => Promise<NextResponse> {
+  handler: (...args: Args) => Promise<Response>,
+): (...args: Args) => Promise<Response> {
   return async (...args: Args) => {
     try {
       return await handler(...args);

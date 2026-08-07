@@ -52,20 +52,40 @@ export class ApiError extends Error {
 
 const BASE = "/api/v1";
 
+/**
+ * Parámetros de consulta.
+ *
+ * Se tipa como `object` y no como `Record<string, ...>` a propósito: TypeScript
+ * NO considera que una `interface` satisfaga un `Record`, porque las
+ * interfaces no reciben firma de índice implícita. Como todos los filtros de
+ * la aplicación son interfaces con nombre (`SaleFilters`, `ProductFilters`…),
+ * exigir `Record` obligaría a añadir `[key: string]: unknown` a cada una —
+ * lo que destruiría la comprobación de campos mal escritos, que es justo para
+ * lo que sirven.
+ *
+ * No se pierde seguridad real: todo valor acaba pasando por `String()` para ir
+ * en la URL, así que el tipo concreto de cada valor no cambia el resultado.
+ */
+export type QueryParams = object;
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
-  /** Parámetros de consulta; los `undefined` se omiten. */
-  query?: Record<string, string | number | boolean | undefined | null>;
+  /** Parámetros de consulta; los `undefined`, `null` y `""` se omiten. */
+  query?: QueryParams;
 }
 
-function buildUrl(path: string, query?: RequestOptions["query"]): string {
+function buildUrl(path: string, query?: QueryParams): string {
   const url = `${BASE}${path}`;
   if (!query) return url;
 
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
+
+  for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
+    // Omitir vacíos evita URLs con `?search=&status=` que ensucian la caché de
+    // TanStack Query: `?search=` y sin parámetro son la misma consulta, pero
+    // producirían claves distintas.
     if (value === undefined || value === null || value === "") continue;
     params.set(key, String(value));
   }
@@ -155,7 +175,7 @@ export async function apiFetch<T>(
 
 /** Atajos por verbo, para que las llamadas se lean bien. */
 export const api = {
-  get: <T>(path: string, query?: RequestOptions["query"], signal?: AbortSignal) =>
+  get: <T>(path: string, query?: QueryParams, signal?: AbortSignal) =>
     apiFetch<T>(path, { method: "GET", query, signal }),
 
   post: <T>(path: string, body?: unknown) =>
