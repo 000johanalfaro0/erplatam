@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { FeedbackLayer } from "@/modules/feedback/feedback-layer";
 import { GuidedTour } from "@/modules/tour/guided-tour";
 
+import { ThemeSwitcher } from "../theme-switcher";
+
 import { useSession } from "../session-provider";
 import { Button } from "../ui/button";
 import {
@@ -140,6 +142,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <GlobalSearch />
 
           <div className="ml-auto flex items-center gap-1">
+            <ThemeSwitcher />
             <GuidedTour />
 
             <Button

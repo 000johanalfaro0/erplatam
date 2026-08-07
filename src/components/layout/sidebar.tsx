@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 
-import { BRAND } from "@/config/brand";
+import { useBrand } from "../theme-switcher";
 import { NAVIGATION } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const { can, business } = useSession();
+  const marca = useBrand();
 
   const sections = React.useMemo(
     () =>
@@ -55,18 +56,18 @@ export function Sidebar({
     >
       {/* Identidad del negocio */}
       <div className="flex h-14 items-center gap-2.5 border-b border-line px-4">
+        {/* Icono de la direccion visual activa, no la inicial en un cuadrado. */}
         <div
           aria-hidden
-          className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-bold text-accent-ink"
-        >
-          {BRAND.name.charAt(0)}
-        </div>
+          className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-accent-ink [&_svg]:size-4"
+          dangerouslySetInnerHTML={{ __html: marca.icono }}
+        />
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold leading-tight text-ink">
             {business.name}
           </p>
           <p className="truncate text-[11px] leading-tight text-ink-subtle">
-            {BRAND.tagline}
+            {marca.descriptor}
           </p>
         </div>
       </div>
