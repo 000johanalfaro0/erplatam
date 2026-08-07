@@ -46,6 +46,34 @@ function conSsl(url: string): string {
   return url + (url.includes("?") ? "&" : "?") + "sslmode=require";
 }
 
+/**
+ * Avisa si la cadena de Supabase es la que no sirve.
+ *
+ * Supabase ofrece tres y solo una vale para todo. Equivocarse no da un error
+ * claro: la directa simplemente agota el tiempo de espera —es solo IPv6 en el
+ * plan gratuito— y el pooler de transacciones falla más tarde, al migrar,
+ * porque no admite sentencias preparadas. Las dos son media hora de
+ * desconcierto, así que se detectan aquí.
+ */
+function avisarSiEsSupabaseEquivocada(url: string) {
+  if (!url.includes("supabase")) return;
+
+  if (url.includes(":6543")) {
+    console.warn(
+      "\n⚠  Estás usando el POOLER DE TRANSACCIONES (puerto 6543).\n" +
+        "   No admite sentencias preparadas, que es lo que usa Prisma, y no\n" +
+        "   sirve para migraciones. Usa el Session pooler: mismo host, 5432.\n",
+    );
+  } else if (/@db\.[a-z0-9]+\.supabase\.co/.test(url)) {
+    console.warn(
+      "\n⚠  Estás usando la CONEXIÓN DIRECTA (host db.….supabase.co).\n" +
+        "   En el plan gratuito solo responde por IPv6, así que desde muchas\n" +
+        "   redes y desde las funciones de Vercel no se alcanza. Usa el\n" +
+        "   Session pooler: host …pooler.supabase.com, puerto 5432.\n",
+    );
+  }
+}
+
 function ultimoRespaldo(): string {
   if (!existsSync(RESPALDOS)) {
     throw new Error(
@@ -104,6 +132,8 @@ async function main() {
 
   const origen = process.env.DATABASE_URL;
   if (!origen) throw new Error("Falta DATABASE_URL en .env");
+
+  avisarSiEsSupabaseEquivocada(destino);
 
   const respaldo = ultimoRespaldo();
   console.log(`Respaldo:  ${respaldo}`);

@@ -35,20 +35,37 @@ DB=$(grep -oP '(?<=^DATABASE_URL=")[^"]+' .env)
 
 ---
 
-## Paso 1 — Conseguir una base propia (esto lo haces tú)
+## Paso 1 — Crear el proyecto en Supabase (esto lo haces tú)
 
-Hace falta una cadena de conexión `postgres://…`. Cualquiera de estas sirve:
+1. supabase.com → **New project**
+2. Región: **East US (North Virginia)** o la más cercana a México
+3. Guarda la contraseña de la base **en un gestor**: Supabase no la vuelve a
+   enseñar
+4. Project Settings → **Database** → **Connection string** → pestaña **URI**
 
-| Dónde | Cómo | Notas |
+### Cuál de las tres cadenas, que aquí está la trampa
+
+Supabase ofrece tres y solo una nos sirve para todo:
+
+| | Puerto | Sirve |
 |---|---|---|
-| **Prisma Postgres** | Crear cuenta en console.prisma.io → New project → Postgres | El plan gratuito no incluye copias de seguridad |
-| **Neon** | neon.tech, plan gratuito | Incluye *restauración a un punto en el tiempo* |
-| **Supabase** | supabase.com, plan gratuito | Copias diarias en el plan de pago |
+| **Direct connection** | 5432 | ❌ Solo IPv6 en el plan gratuito. Desde muchas redes —y desde las funciones de Vercel— no se alcanza |
+| **Transaction pooler** | 6543 | ⚠️ No admite sentencias preparadas. Prisma las usa, así que exige `?pgbouncer=true` y aun así no vale para migraciones |
+| **Session pooler** | 5432 (host `…pooler.supabase.com`) | ✅ **Esta.** IPv4, admite sentencias preparadas, sirve para restaurar, migrar y para la aplicación |
 
-Da igual cuál: el proyecto solo necesita PostgreSQL. No usamos nada
-específico de Prisma Postgres.
+La correcta tiene esta forma:
 
-**Lo único que hay que pegar aquí es la cadena de conexión.**
+```
+postgresql://postgres.abcdefghijklm:TU_CONTRASEÑA@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+```
+
+Fíjate en las dos señas: el usuario lleva **punto y el identificador del
+proyecto**, y el host contiene **`pooler`**. Si el usuario es solo `postgres`
+y el host empieza por `db.`, es la directa y no funcionará.
+
+> El proyecto solo necesita PostgreSQL. No usamos nada propio de Supabase
+> —ni su autenticación, ni su almacenamiento, ni sus políticas de fila—, así
+> que mudarse otra vez más adelante vuelve a ser este mismo procedimiento.
 
 ---
 
