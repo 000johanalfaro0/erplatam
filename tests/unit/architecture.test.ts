@@ -266,6 +266,71 @@ describe("Regla 3 — el cliente no accede a la base de datos", () => {
   });
 });
 
+describe("Regla 4 — la navegación no lleva a ninguna parte rota", () => {
+  it("toda entrada del menú tiene su página", () => {
+    /*
+     * ESTE TEST NACIÓ DE UN BUG QUE VIO EL USUARIO ANTES QUE YO.
+     *
+     * El menú tenía "Compras" apuntando a /compras, y esa página no existía:
+     * el backend funcionaba pero la pantalla nunca se construyó. Resultado:
+     * un enlace visible que llevaba a un 404.
+     *
+     * Un menú que lleva a la nada es peor que no tener el menú: promete algo
+     * que no está. Y no lo detecta ni el compilador ni ningún test de
+     * dominio, porque tanto la ruta como la página son correctas por
+     * separado — lo que falta es la relación entre ambas.
+     */
+    const navSource = readFileSync(
+      join(SRC, "config", "navigation.ts"),
+      "utf8",
+    );
+
+    const rutas = [...navSource.matchAll(/href:\s*"([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+
+    expect(rutas.length, "No se encontró ninguna ruta en navigation.ts").toBeGreaterThan(0);
+
+    const rotas = rutas.filter((ruta) => {
+      const dir = join(SRC, "app", "(app)", ruta === "/" ? "" : ruta);
+      try {
+        return !statSync(join(dir, "page.tsx")).isFile();
+      } catch {
+        return true;
+      }
+    });
+
+    expect(
+      rotas,
+      `Entradas del menú sin página: ${rotas.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("los pasos del tutorial apuntan a rutas que existen", () => {
+    // Mismo problema, otra superficie: un paso del tutorial que navega a una
+    // pantalla inexistente deja al usuario en un 404 en mitad del recorrido.
+    const tourSource = readFileSync(join(SRC, "config", "tour.ts"), "utf8");
+
+    const rutas = [...tourSource.matchAll(/route:\s*"([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+
+    const rotas = rutas.filter((ruta) => {
+      const dir = join(SRC, "app", "(app)", ruta === "/" ? "" : ruta);
+      try {
+        return !statSync(join(dir, "page.tsx")).isFile();
+      } catch {
+        return true;
+      }
+    });
+
+    expect(
+      rotas,
+      `Pasos del tutorial hacia páginas inexistentes: ${rotas.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("Regla 3 (bis) — importaciones directas", () => {
   it("ningún componente de interfaz importa el cliente de base de datos", () => {
     /*
