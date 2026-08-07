@@ -55,6 +55,8 @@
   /* --- Tipografía --- */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-stack), ui-monospace, monospace;
+  /* Solo para las notas adhesivas. No se usa en ninguna pantalla. */
+  --font-manuscrita: var(--font-caveat), "Segoe Script", cursive;
 
   /* --- Radios: discretos. Nada de píldoras salvo en badges --- */
   --radius-xs: 0.25rem;

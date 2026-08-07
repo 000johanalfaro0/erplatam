@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter, Source_Serif_4 } from "next/font/google";
+import {
+  Bricolage_Grotesque,
+  Caveat,
+  Inter,
+  Source_Serif_4,
+} from "next/font/google";
 
 import { Providers } from "@/components/providers";
 import { BRAND } from "@/config/brand";
@@ -34,6 +39,19 @@ const bricolage = Bricolage_Grotesque({
 /** Dirección "Libro": serifa de texto con pesos reales y cifras alineadas. */
 const sourceSerif = Source_Serif_4({
   variable: "--font-serif-libro",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+/**
+ * Letra manuscrita, solo para las notas adhesivas.
+ *
+ * Caveat y no una de las fuentes "handwriting" más marcadas: hay que poder
+ * leer de un vistazo una frase escrita a las once de la noche por alguien
+ * enfadado con una pantalla. Legibilidad primero; el gesto, después.
+ */
+const caveat = Caveat({
+  variable: "--font-caveat",
   subsets: ["latin"],
   display: "swap",
 });
@@ -84,7 +102,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es-MX"
-      className={`${inter.variable} ${bricolage.variable} ${sourceSerif.variable} h-full`}
+      className={`${inter.variable} ${bricolage.variable} ${sourceSerif.variable} ${caveat.variable} h-full`}
       suppressHydrationWarning
     >
       <head>

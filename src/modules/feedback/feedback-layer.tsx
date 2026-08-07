@@ -23,6 +23,8 @@ import {
 } from "@/lib/anchor";
 import { cn } from "@/lib/utils";
 
+import { PostIt, papelDe } from "./post-it";
+
 /**
  * CAPA DE ANOTACIONES (requisito 21, rediseñado)
  * ===========================================================================
@@ -63,6 +65,8 @@ interface NotaUbicada {
 }
 
 const ANCHO_NOTA = 224;
+/** Alto mínimo del papel. Un post-it es casi cuadrado, no una tira. */
+const ALTO_NOTA = 128;
 const SEPARACION = 12;
 
 export function FeedbackLayer() {
@@ -144,7 +148,10 @@ export function FeedbackLayer() {
   React.useEffect(() => {
     if (!activo) return;
 
-    recolocar();
+    // Se mide DESPUÉS del pintado, no dentro del efecto. Medir antes de que
+    // el navegador haya pintado devuelve rectángulos de cero y las notas
+    // aparecen todas apiladas en la esquina durante un fotograma.
+    const marco = requestAnimationFrame(recolocar);
 
     // Un poco después: el contenido puede tardar en pintarse.
     const timer = setTimeout(recolocar, 400);
@@ -157,6 +164,7 @@ export function FeedbackLayer() {
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      cancelAnimationFrame(marco);
       clearTimeout(timer);
       window.removeEventListener("scroll", recolocar, true);
       window.removeEventListener("resize", recolocar);
@@ -238,7 +246,7 @@ export function FeedbackLayer() {
         nota.rect.left + nota.rect.width + ANCHO_NOTA + SEPARACION <
         window.innerWidth;
 
-      let left = cabeDerecha
+      const left = cabeDerecha
         ? nota.rect.left + nota.rect.width + SEPARACION
         : Math.max(8, nota.rect.left - ANCHO_NOTA - SEPARACION);
 
@@ -252,14 +260,14 @@ export function FeedbackLayer() {
           (u) =>
             Math.abs(u.left - left) < ANCHO_NOTA &&
             top < u.bottom + 6 &&
-            top + 70 > u.top,
+            top + ALTO_NOTA > u.top,
         )
       ) {
-        top += 76;
+        top += ALTO_NOTA + 8;
         intentos++;
       }
 
-      usadas.push({ top, bottom: top + 70, left });
+      usadas.push({ top, bottom: top + ALTO_NOTA, left });
       return { top, left };
     });
   }, [ubicadas]);
@@ -290,39 +298,52 @@ export function FeedbackLayer() {
               />
 
               {/* La nota */}
-              <div
+              <PostIt
                 data-feedback-ui
-                className="fixed z-90 w-56 rounded-md border border-warning/40 bg-warning-soft p-2.5 shadow-raised"
-                style={{ top: pos.top, left: pos.left }}
+                semilla={nota.anotacion.id}
+                className="fixed z-90 flex w-56 flex-col px-3.5 pb-2 pt-4"
+                style={{
+                  top: pos.top,
+                  left: pos.left,
+                  minHeight: ALTO_NOTA,
+                }}
               >
-                <p className="text-[12.5px] leading-snug text-ink">
+                <p className="flex-1 font-manuscrita text-[19px] leading-[1.25] break-words">
                   {nota.anotacion.title}
                 </p>
-                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-subtle">
-                  <span className="truncate">
+                <div className="mt-2 flex items-center gap-1.5 text-[13px] text-[#2b2a24]/55">
+                  <span className="truncate font-manuscrita">
                     {nota.anotacion.createdBy?.name ?? "—"}
                   </span>
                   <button
                     type="button"
                     onClick={() => descartar.mutate(nota.anotacion.id)}
                     aria-label={`Quitar la nota "${nota.anotacion.title}"`}
-                    className="ml-auto shrink-0 rounded-xs p-0.5 transition-colors hover:text-danger"
+                    className="ml-auto shrink-0 p-0.5 transition-colors hover:text-danger"
                   >
-                    <Trash2 className="size-3" aria-hidden />
+                    <Trash2 className="size-3.5" aria-hidden />
                   </button>
                 </div>
-              </div>
+              </PostIt>
             </React.Fragment>
           );
         })}
 
       {/* --- Nota en edición --- */}
       {activo && borrador && (
-        <div
+        <PostIt
           data-feedback-ui
-          className="fixed left-1/2 top-1/2 z-100 w-72 -translate-x-1/2 -translate-y-1/2 rounded-md border border-warning/50 bg-warning-soft p-3 shadow-overlay"
+          // Semilla fija: mientras se escribe, el papel no debe cambiar de
+          // color ni de inclinación con cada tecla.
+          semilla="borrador"
+          className="fixed left-1/2 top-1/2 z-100 w-72 px-4 pb-3 pt-4"
+          style={{
+            // La rotación de PostIt se combina con el centrado; si no se
+            // compone aquí, el papel se iría a la esquina superior izquierda.
+            transform: `translate(-50%, -50%) rotate(${papelDe("borrador").giro}deg)`,
+          }}
         >
-          <p className="mb-2 text-[11px] font-medium text-ink-muted">
+          <p className="mb-2 text-[12px] font-medium text-[#2b2a24]/60">
             {borrador.ancla.label}
           </p>
           <textarea
@@ -341,10 +362,14 @@ export function FeedbackLayer() {
             placeholder="¿Qué cambiarías de esto?"
             aria-label="Texto de la nota"
             rows={3}
-            className="w-full resize-none rounded-sm border border-warning/40 bg-surface p-2 text-[13px] text-ink outline-none placeholder:text-ink-subtle focus-visible:border-accent"
+            // Se escribe directamente sobre el papel: sin caja, sin borde y
+            // con la misma letra que tendrá la nota una vez pegada. Escribir
+            // dentro de un campo de formulario encima de un post-it rompería
+            // la ilusión justo en el momento en que más importa.
+            className="w-full resize-none border-0 bg-transparent font-manuscrita text-[19px] leading-[1.25] text-[#2b2a24] outline-none placeholder:text-[#2b2a24]/35"
           />
           <div className="mt-2 flex items-center gap-1.5">
-            <span className="text-[11px] text-ink-subtle">Enter para pegar</span>
+            <span className="text-[11px] text-[#2b2a24]/50">Enter para pegar</span>
             <Button
               variant="ghost"
               size="sm"
@@ -364,7 +389,7 @@ export function FeedbackLayer() {
               Pegar
             </Button>
           </div>
-        </div>
+        </PostIt>
       )}
 
       {/* --- Barra de control --- */}
