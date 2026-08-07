@@ -1,4 +1,4 @@
-import { AUDIT_ACTIONS } from "@/server/core/audit";
+import { AUDIT_ACTIONS } from "@/server/core/audit-actions";
 
 /**
  * Traducción de los verbos de la bitácora a español llano.

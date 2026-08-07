@@ -1,3 +1,4 @@
+import type { AuditAction } from "./audit-actions";
 import type { RequestContext } from "./context";
 import { db } from "./db";
 import { logger } from "./logger";
@@ -18,55 +19,16 @@ import type { Tx } from "./tx";
  * `auditDetached`, que no bloquea ni tumba la operación si falla.
  */
 
-/** Verbos en formato `recurso.acción`. Lista cerrada para poder filtrar. */
-export const AUDIT_ACTIONS = {
-  AUTH_LOGIN: "auth.login",
-  AUTH_LOGIN_FAILED: "auth.login_failed",
-  AUTH_LOGOUT: "auth.logout",
-
-  PRODUCT_CREATE: "product.create",
-  PRODUCT_UPDATE: "product.update",
-  PRODUCT_DELETE: "product.delete",
-
-  CATEGORY_CREATE: "category.create",
-  CATEGORY_UPDATE: "category.update",
-  CATEGORY_DELETE: "category.delete",
-
-  CUSTOMER_CREATE: "customer.create",
-  CUSTOMER_UPDATE: "customer.update",
-  CUSTOMER_DELETE: "customer.delete",
-
-  SUPPLIER_CREATE: "supplier.create",
-  SUPPLIER_UPDATE: "supplier.update",
-  SUPPLIER_DELETE: "supplier.delete",
-
-  SALE_CREATE: "sale.create",
-  SALE_VOID: "sale.void",
-
-  PURCHASE_CREATE: "purchase.create",
-  PURCHASE_VOID: "purchase.void",
-
-  INVENTORY_ADJUST: "inventory.adjust",
-  INVENTORY_ENTRY: "inventory.entry",
-  INVENTORY_EXIT: "inventory.exit",
-
-  EXPENSE_CREATE: "expense.create",
-  EXPENSE_UPDATE: "expense.update",
-  EXPENSE_DELETE: "expense.delete",
-
-  USER_CREATE: "user.create",
-  USER_UPDATE: "user.update",
-  USER_DEACTIVATE: "user.deactivate",
-
-  SETTINGS_UPDATE: "settings.update",
-
-  FEEDBACK_CREATE: "feedback.create",
-  FEEDBACK_UPDATE: "feedback.update",
-
-  DISCOVERY_SUBMIT: "discovery.submit",
-} as const;
-
-export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
+/**
+ * Verbos de la bitácora.
+ *
+ * Se re-exportan desde `audit-actions.ts`, que es un módulo PURO sin ninguna
+ * dependencia. La interfaz necesita estas constantes para traducirlas a
+ * español, y si las importara desde aquí arrastraría consigo el cliente de
+ * base de datos al bundle del navegador — que fue exactamente el fallo que
+ * tumbaba la pantalla de auditoría con un 500.
+ */
+export { AUDIT_ACTIONS, type AuditAction } from "./audit-actions";
 
 export interface AuditInput {
   action: AuditAction;

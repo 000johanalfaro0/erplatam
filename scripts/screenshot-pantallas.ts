@@ -19,6 +19,8 @@ const PANTALLAS = [
   { ruta: "/clientes", titulo: "Clientes", archivo: "21-clientes" },
   { ruta: "/proveedores", titulo: "Proveedores", archivo: "22-proveedores" },
   { ruta: "/configuracion", titulo: "Configuración y análisis del negocio", archivo: "23-cuestionario" },
+  { ruta: "/reportes", titulo: "Reportes", archivo: "24-reportes" },
+  { ruta: "/auditoria", titulo: "Auditoría", archivo: "25-auditoria" },
 ];
 
 async function main() {

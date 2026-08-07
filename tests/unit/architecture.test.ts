@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -141,7 +141,132 @@ describe("Regla 2 — el dominio no conoce el framework", () => {
   });
 });
 
+/**
+ * Resuelve un especificador de import a una ruta de archivo real.
+ *
+ * Maneja DOS formas, y ambas son imprescindibles:
+ *
+ *   - Alias:     "@/server/core/db"
+ *   - Relativo:  "./db", "../core/db"
+ *
+ * La primera versión de esta función solo seguía los alias, y por eso el test
+ * pasaba pese a existir la violación: la cadena real era
+ * `lib/audit-labels` → `@/server/core/audit` → `./db`, y ese último salto
+ * relativo era invisible. Un test que no puede fallar no prueba nada.
+ *
+ * Devuelve null para dependencias externas (react, zod…), que no interesan.
+ */
+function resolveImport(spec: string, fromFile: string): string | null {
+  let base: string;
+
+  if (spec.startsWith("@/")) {
+    base = join(SRC, spec.slice(2));
+  } else if (spec.startsWith(".")) {
+    base = join(dirname(fromFile), spec);
+  } else {
+    return null;
+  }
+
+  for (const candidate of [
+    `${base}.ts`,
+    `${base}.tsx`,
+    join(base, "index.ts"),
+    join(base, "index.tsx"),
+  ]) {
+    try {
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Siguiente candidato.
+    }
+  }
+  return null;
+}
+
+/**
+ * Sigue la cadena de importaciones desde un archivo y devuelve todo lo que
+ * acaba alcanzando, directa o indirectamente.
+ */
+function transitiveImports(entry: string): Map<string, string[]> {
+  const alcanzado = new Map<string, string[]>();
+  const pendientes: { file: string; ruta: string[] }[] = [
+    { file: entry, ruta: [] },
+  ];
+
+  while (pendientes.length > 0) {
+    const { file, ruta } = pendientes.pop()!;
+    if (alcanzado.has(file)) continue;
+    alcanzado.set(file, ruta);
+
+    let specs: string[];
+    try {
+      specs = importsOf(file);
+    } catch {
+      continue;
+    }
+
+    for (const spec of specs) {
+      const resolved = resolveImport(spec, file);
+      if (resolved && !alcanzado.has(resolved)) {
+        pendientes.push({
+          file: resolved,
+          ruta: [...ruta, relative(SRC, file)],
+        });
+      }
+    }
+  }
+
+  return alcanzado;
+}
+
 describe("Regla 3 — el cliente no accede a la base de datos", () => {
+  it("ningún componente de cliente alcanza el cliente de base de datos, ni siquiera de forma indirecta", () => {
+    /*
+     * ESTE TEST NACIÓ DE UN BUG REAL.
+     *
+     * La pantalla de auditoría devolvía 500. La cadena era:
+     *
+     *   auditoria/page.tsx ("use client")
+     *     → lib/audit-labels        (traducir verbos a español)
+     *       → server/core/audit     (donde vivían las constantes)
+     *         → server/core/db      (porque audit.ts escribe)
+     *           → Prisma en el bundle del navegador
+     *
+     * La versión anterior de este test solo miraba importaciones DIRECTAS, así
+     * que no vio nada. Compilaba sin errores. El único síntoma era un 500 al
+     * abrir la pantalla.
+     *
+     * Ahora se sigue la cadena completa.
+     */
+    const prohibido = join(SRC, "server", "core", "db.ts");
+    const violaciones: string[] = [];
+
+    const clientDirs = [
+      join(SRC, "app"),
+      join(SRC, "components"),
+      join(SRC, "modules"),
+    ];
+
+    for (const dir of clientDirs) {
+      for (const file of listFiles(dir)) {
+        const content = readFileSync(file, "utf8");
+        if (!/^["']use client["']/m.test(content)) continue;
+
+        const alcanzado = transitiveImports(file);
+
+        if (alcanzado.has(prohibido)) {
+          const cadena = [...(alcanzado.get(prohibido) ?? []), "server/core/db.ts"];
+          violaciones.push(
+            `${relative(SRC, file)} alcanza la base de datos:\n    ${cadena.join("\n    → ")}`,
+          );
+        }
+      }
+    }
+
+    expect(violaciones, `\n${violaciones.join("\n\n")}`).toEqual([]);
+  });
+});
+
+describe("Regla 3 (bis) — importaciones directas", () => {
   it("ningún componente de interfaz importa el cliente de base de datos", () => {
     /*
      * Un `import { db }` en un componente marcado con "use client" no falla al
