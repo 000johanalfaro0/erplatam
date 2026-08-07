@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { FeedbackMode } from "@/modules/feedback/feedback-mode";
 
 import { useSession } from "../session-provider";
 import { Button } from "../ui/button";
@@ -215,6 +216,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      {/*
+        Modo feedback: vive fuera del <main> para que su barra flotante y sus
+        superposiciones no se vean afectadas por el desplazamiento del
+        contenido, y para poder capturar la pantalla completa.
+      */}
+      <FeedbackMode />
 
       {/* Nombre del negocio para lectores de pantalla al entrar */}
       <span className="sr-only">{business.name}</span>
