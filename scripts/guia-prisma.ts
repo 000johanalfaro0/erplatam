@@ -1,15 +1,24 @@
 import { chromium } from "@playwright/test";
 
 /**
- * Captura la página de reclamación de la base de datos, para poder guiar al
- * usuario paso a paso sobre lo que verá en su pantalla.
+ * Verifica que un enlace de reclamación de base de datos funcione ANTES de
+ * pasárselo a la persona.
  *
- * Solo NAVEGA Y OBSERVA. No inicia sesión, no crea cuentas y no pulsa nada:
- * esas acciones las tiene que hacer la persona con sus propias credenciales.
+ *   npx tsx scripts/guia-prisma.ts <claimUrl>
+ *
+ * Comprueba que la página carga, que el proyecto existe del lado de Prisma
+ * (la petición de verificación no devuelve 404) y captura lo que se verá.
+ *
+ * Solo NAVEGA Y OBSERVA. No inicia sesión ni pulsa el botón de reclamar:
+ * esas acciones exigen credenciales personales.
  */
 
-const CLAIM_URL =
-  "https://create-db.prisma.io/claim?projectID=proj_jetiqeomcuin094m3zn60m6j";
+const claimUrl = process.argv[2];
+
+if (!claimUrl) {
+  console.error("Uso: npx tsx scripts/guia-prisma.ts <claimUrl>");
+  process.exit(1);
+}
 
 async function main() {
   const browser = await chromium.launch();
@@ -18,28 +27,43 @@ async function main() {
     deviceScaleFactor: 2,
   });
 
-  await page.goto(CLAIM_URL, { waitUntil: "networkidle", timeout: 60_000 });
-  await page.waitForTimeout(2500);
+  // Se escuchan las respuestas de red: así se detecta el 404 de verificación
+  // del proyecto, que es justo el fallo que hubo la vez anterior y que la
+  // página no muestra hasta que pulsas el botón.
+  const fallos: string[] = [];
+
+  page.on("response", (response) => {
+    if (response.status() >= 400) {
+      fallos.push(`${response.status()} ${response.url().slice(0, 120)}`);
+    }
+  });
+
+  await page.goto(claimUrl, { waitUntil: "networkidle", timeout: 60_000 });
+  await page.waitForTimeout(3500);
 
   await page.screenshot({ path: "capturas/guia-01-prisma-claim.png" });
-  console.log("✓ capturas/guia-01-prisma-claim.png");
-  console.log("  URL final:", page.url());
-  console.log("  Título:", await page.title());
 
-  // Texto visible de los botones, para poder nombrarlos con exactitud.
-  const botones = await page
-    .getByRole("button")
-    .allInnerTexts()
-    .catch(() => []);
-  const enlaces = await page.getByRole("link").allInnerTexts().catch(() => []);
+  const cuerpo = await page.locator("body").innerText();
+  const proyectoNoEncontrado = /project not found|not found|no existe/i.test(cuerpo);
 
+  console.log("URL:", page.url());
+  console.log("Título:", await page.title());
   console.log(
-    "  Botones:",
-    botones.filter(Boolean).map((t) => t.replace(/\s+/g, " ").trim()).join(" | "),
+    "Botones:",
+    (await page.getByRole("button").allInnerTexts())
+      .filter(Boolean)
+      .map((t) => t.replace(/\s+/g, " ").trim())
+      .join(" | "),
   );
   console.log(
-    "  Enlaces:",
-    enlaces.filter(Boolean).map((t) => t.replace(/\s+/g, " ").trim()).slice(0, 10).join(" | "),
+    "Peticiones fallidas:",
+    fallos.length === 0 ? "ninguna" : fallos.join("\n  "),
+  );
+  console.log(
+    "\nVEREDICTO:",
+    proyectoNoEncontrado || fallos.some((f) => f.startsWith("404"))
+      ? "✗ EL ENLACE NO SIRVE — el proyecto no existe del lado de Prisma"
+      : "✓ El enlace carga correctamente y el proyecto existe",
   );
 
   await browser.close();

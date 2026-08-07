@@ -70,6 +70,51 @@ async function main() {
     console.log("✓ 05-stock-bajo.png");
   }
 
+  // --- Punto de venta: VENTA REAL de principio a fin -----------------------
+  await page.goto(`${BASE_URL}/ventas/nueva`, { waitUntil: "networkidle" });
+  await page.screenshot({ path: `${OUT_DIR}/06-pos-vacio.png` });
+  console.log("✓ 06-pos-vacio.png");
+
+  // Se escribe en el buscador como lo haría un cajero.
+  const buscador = page.getByLabel("Escanear o buscar producto");
+  await buscador.fill("Jabón");
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${OUT_DIR}/07-pos-busqueda.png` });
+  console.log("✓ 07-pos-busqueda.png");
+
+  // Enter agrega el producto resaltado, sin tocar el ratón.
+  await buscador.press("Enter");
+  await page.waitForTimeout(600);
+
+  // Segundo producto, para que el ticket tenga dos líneas con IVA distinto.
+  await buscador.fill("Arroz");
+  await page.waitForTimeout(1200);
+  await buscador.press("Enter");
+  await page.waitForTimeout(600);
+
+  await page.screenshot({ path: `${OUT_DIR}/08-pos-carrito.png` });
+  console.log("✓ 08-pos-carrito.png");
+
+  // Cobro.
+  await page.getByRole("button", { name: /^Cobrar/ }).click();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${OUT_DIR}/09-pos-cobro.png` });
+  console.log("✓ 09-pos-cobro.png");
+
+  // Se paga con un billete de $100 para ver el cálculo del cambio.
+  const billete = page.getByRole("button", { name: "$100.00" });
+  if (await billete.isVisible().catch(() => false)) {
+    await billete.click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${OUT_DIR}/10-pos-cambio.png` });
+    console.log("✓ 10-pos-cambio.png");
+  }
+
+  await page.getByRole("button", { name: "Confirmar cobro" }).click();
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${OUT_DIR}/11-pos-cobrado.png` });
+  console.log("✓ 11-pos-cobrado.png");
+
   console.log("✓ recorrido completado");
 
   await browser.close();

@@ -5,11 +5,25 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { env, isDevelopment } from "./env";
 
 /**
- * Cliente Prisma como singleton.
+ * Cliente Prisma, creado de forma PEREZOSA.
  *
- * En desarrollo, Next.js recarga los módulos en cada cambio. Sin el singleton
- * global se abriría un pool de conexiones nuevo en cada recarga hasta agotar
- * los slots de Postgres.
+ * Dos motivos para no instanciarlo al importar el módulo:
+ *
+ * 1. COMPILACIÓN SIN SECRETOS.
+ *    `next build` importa cada ruta para recoger su configuración. Si el
+ *    cliente se creara aquí, leería DATABASE_URL y la compilación fallaría sin
+ *    credenciales. Un artefacto de compilación no debe depender de secretos de
+ *    ejecución — y además obliga a exponerlos en el entorno de build sin
+ *    necesidad. (Este fallo se detectó en el primer despliegue a Vercel.)
+ *
+ * 2. ARRANQUE EN FRÍO MÁS BARATO.
+ *    Una función serverless que solo devuelve HTML no necesita abrir un pool
+ *    de conexiones. Con la creación perezosa, solo paga ese coste quien de
+ *    verdad consulta la base de datos.
+ *
+ * El singleton global sigue siendo necesario: en desarrollo Next recarga los
+ * módulos en cada cambio y, sin él, se abriría un pool nuevo por recarga hasta
+ * agotar los slots de Postgres.
  */
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -29,11 +43,32 @@ function createClient(): PrismaClient {
   });
 }
 
-export const db: PrismaClient = globalForPrisma.prisma ?? createClient();
-
-if (isDevelopment) {
-  globalForPrisma.prisma = db;
+function getClient(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createClient();
+  }
+  return globalForPrisma.prisma;
 }
+
+/**
+ * Cliente de base de datos.
+ *
+ * Se expone como Proxy para que el código lo use igual que siempre
+ * (`db.product.findMany(...)`), pero la conexión no se abra hasta la primera
+ * consulta real.
+ */
+export const db: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, property, receiver) {
+    const client = getClient();
+    const value = Reflect.get(client, property, client);
+    // Los métodos se enlazan al cliente real; si no, `this` sería el Proxy y
+    // Prisma fallaría al acceder a su estado interno.
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+  has(_target, property) {
+    return property in getClient();
+  },
+});
 
 /**
  * Tipo del cliente dentro de una transacción.
