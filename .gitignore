@@ -1,0 +1,41 @@
+# dependencias
+/node_modules
+/.pnp
+.pnp.*
+
+# pruebas
+/coverage
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# capturas de revisión visual (se regeneran con scripts/screenshot.ts)
+/capturas
+
+# next.js
+/.next/
+/out/
+/build
+
+# cliente generado por prisma (se regenera con `prisma generate`)
+/src/generated/prisma
+
+# variables de entorno — los secretos NUNCA se comitean, la plantilla sí
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# varios
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

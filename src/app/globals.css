@@ -1,0 +1,178 @@
+@import "tailwindcss";
+/* Utilidades de entrada/salida (animate-in, fade-in-0, slide-in-from-right).
+   Las usan los componentes de capa superpuesta construidos sobre Radix. */
+@import "tw-animate-css";
+
+/* ===========================================================================
+   SISTEMA DE DISEÑO
+   ---------------------------------------------------------------------------
+   Principio rector: "ERP moderno, no software empresarial de 2010."
+
+   - Paleta casi monocroma: blancos, grises, negro.
+   - UN solo color de acento, usado con avaricia: acciones primarias, estado
+     activo, foco. Si el acento aparece en todas partes, deja de significar
+     nada.
+   - Sin degradados decorativos. Sin sombras pesadas.
+   - Jerarquía por espaciado y peso tipográfico, no por color.
+   - Bordes de 1px muy sutiles como separador principal.
+
+   Los colores se definen en OKLCH porque su luminosidad es perceptualmente
+   uniforme: aclarar u oscurecer un tono no cambia su intensidad aparente, algo
+   que con HSL sí ocurre y obliga a corregir a ojo.
+   =========================================================================== */
+
+@theme {
+  /* --- Superficies --- */
+  --color-canvas: oklch(98.5% 0.001 240); /* Fondo de la aplicación */
+  --color-surface: oklch(100% 0 0); /* Tarjetas, paneles */
+  --color-surface-raised: oklch(100% 0 0); /* Modales, menús */
+  --color-surface-sunken: oklch(97% 0.002 240); /* Cabeceras de tabla */
+
+  /* --- Texto --- */
+  --color-ink: oklch(21% 0.006 240); /* Texto principal */
+  --color-ink-muted: oklch(50% 0.008 240); /* Texto secundario */
+  --color-ink-subtle: oklch(64% 0.008 240); /* Marcadores, ayudas */
+
+  /* --- Bordes --- */
+  --color-line: oklch(92.5% 0.003 240); /* Separador estándar */
+  --color-line-strong: oklch(87% 0.005 240); /* Borde de control */
+
+  /* --- Acento único --- */
+  --color-accent: oklch(54% 0.19 258); /* Azul profundo */
+  --color-accent-hover: oklch(48% 0.19 258);
+  --color-accent-soft: oklch(96% 0.025 258); /* Fondo de estado activo */
+  --color-accent-ink: oklch(100% 0 0); /* Texto sobre acento */
+
+  /* --- Semánticos: solo para estado, nunca decorativos --- */
+  --color-positive: oklch(56% 0.14 155);
+  --color-positive-soft: oklch(96% 0.03 155);
+  --color-warning: oklch(70% 0.15 75);
+  --color-warning-soft: oklch(97% 0.04 85);
+  --color-danger: oklch(56% 0.2 25);
+  --color-danger-hover: oklch(50% 0.2 25);
+  --color-danger-soft: oklch(96% 0.03 25);
+
+  /* --- Tipografía --- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-stack), ui-monospace, monospace;
+
+  /* --- Radios: discretos. Nada de píldoras salvo en badges --- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* --- Sombras: casi imperceptibles, solo para separar planos --- */
+  --shadow-subtle: 0 1px 2px 0 oklch(21% 0.006 240 / 0.04);
+  --shadow-raised:
+    0 1px 3px 0 oklch(21% 0.006 240 / 0.06),
+    0 1px 2px -1px oklch(21% 0.006 240 / 0.04);
+  --shadow-overlay:
+    0 10px 32px -8px oklch(21% 0.006 240 / 0.14),
+    0 2px 8px -2px oklch(21% 0.006 240 / 0.06);
+
+  /* --- Animación: rápida y discreta. Nada por encima de 200 ms --- */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Modo oscuro.
+   El ERP se usa muchas horas seguidas; forzar blanco puro de noche cansa.
+   Se activa por preferencia del sistema o por el atributo data-theme.
+   --------------------------------------------------------------------------- */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root[data-theme="dark"] {
+  --color-canvas: oklch(17% 0.006 250);
+  --color-surface: oklch(21% 0.007 250);
+  --color-surface-raised: oklch(24% 0.008 250);
+  --color-surface-sunken: oklch(19% 0.006 250);
+
+  --color-ink: oklch(96% 0.002 250);
+  --color-ink-muted: oklch(72% 0.006 250);
+  --color-ink-subtle: oklch(56% 0.008 250);
+
+  --color-line: oklch(28% 0.008 250);
+  --color-line-strong: oklch(34% 0.01 250);
+
+  --color-accent: oklch(66% 0.16 258);
+  --color-accent-hover: oklch(72% 0.16 258);
+  --color-accent-soft: oklch(28% 0.05 258);
+  --color-accent-ink: oklch(17% 0.006 250);
+
+  --color-positive: oklch(70% 0.14 155);
+  --color-positive-soft: oklch(26% 0.04 155);
+  --color-warning: oklch(78% 0.14 80);
+  --color-warning-soft: oklch(28% 0.05 80);
+  --color-danger: oklch(68% 0.18 25);
+  --color-danger-hover: oklch(74% 0.18 25);
+  --color-danger-soft: oklch(27% 0.05 25);
+
+  --shadow-subtle: 0 1px 2px 0 oklch(0% 0 0 / 0.3);
+  --shadow-raised: 0 1px 3px 0 oklch(0% 0 0 / 0.4);
+  --shadow-overlay: 0 10px 32px -8px oklch(0% 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    /* Evita el salto horizontal al aparecer la barra de desplazamiento. */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Los números tabulares mantienen alineadas las columnas de importes. */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco visible y consistente en todo el sistema. Requisito de
+     accesibilidad y también de la automatización con Playwright, que navega
+     con teclado. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* Respeta a quien pidió menos movimiento en su sistema operativo. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Oculta los steppers de los campos numéricos: en un punto de venta,
+     un clic accidental que cambia una cantidad es un error de dinero. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    appearance: textfield;
+  }
+}
+
+@layer utilities {
+  /* Importes y cantidades: siempre alineados y monoespaciados en cifras. */
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Barra de desplazamiento discreta para paneles internos. */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}

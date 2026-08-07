@@ -1,0 +1,838 @@
+// =============================================================================
+// ERP — Esquema de base de datos
+// =============================================================================
+// CONVENCIONES CRÍTICAS (ver docs/database.md):
+//
+// 1. DINERO: siempre `Int` en CENTAVOS. Nunca Float, nunca Decimal.
+//    Ejemplo: $1,234.56 MXN  ->  123456
+//    Límite por campo: $21,474,836.47 MXN. Los agregados (SUM) se calculan en
+//    Postgres como bigint, así que los reportes no tienen ese techo.
+//
+// 2. CANTIDADES: siempre `Int` en MILI-UNIDADES (cantidad * 1000).
+//    Ejemplo: 2.5 kg -> 2500 ; 3 piezas -> 3000
+//    Permite vender a granel sin introducir punto flotante en ningún lado.
+//
+// 3. TASAS: `Int` en PUNTOS BÁSICOS (basis points). 16% -> 1600, 0% -> 0.
+//
+// Resultado: el sistema entero opera con enteros. Cero errores de redondeo
+// binario, serialización JSON trivial, tests deterministas.
+//
+// 4. MULTI-TENANT: toda entidad de negocio lleva `businessId`. El MVP corre con
+//    un solo Business, pero la separación existe desde el día uno porque
+//    retrofitearla después es inviable.
+//
+// 5. BORRADO: `deletedAt` (soft delete) en catálogos. Los documentos
+//    (ventas/compras) NUNCA se borran: se cancelan con `status`.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// NEGOCIO Y CONFIGURACIÓN
+// =============================================================================
+
+model Business {
+  id        String    @id @default(uuid())
+  name      String
+  legalName String? // Razón social
+  rfc       String? // RFC del emisor
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  settings           BusinessSettings?
+  users              User[]
+  roles              Role[]
+  categories         Category[]
+  products           Product[]
+  suppliers          Supplier[]
+  customers          Customer[]
+  sales              Sale[]
+  purchases          Purchase[]
+  expenses           Expense[]
+  expenseCategories  ExpenseCategory[]
+  inventoryMovements InventoryMovement[]
+  auditLogs          AuditLog[]
+  taxRates           TaxRate[]
+  paymentMethods     PaymentMethod[]
+  counters           DocumentCounter[]
+  feedbackItems      FeedbackItem[]
+  discoveryResponses DiscoveryResponse[]
+}
+
+model BusinessSettings {
+  id         String @id @default(uuid())
+  businessId String @unique
+
+  // --- Localización (México por defecto) ---
+  currency String @default("MXN")
+  locale   String @default("es-MX")
+  timezone String @default("America/Mexico_City")
+
+  // --- Impuestos ---
+  /// Tasa por defecto para productos nuevos, en basis points. 1600 = 16%.
+  defaultTaxRateBps Int     @default(1600)
+  /// true  = el precio capturado del producto YA incluye impuesto (retail MX típico)
+  /// false = el impuesto se suma sobre el precio
+  pricesIncludeTax  Boolean @default(true)
+
+  // --- Operación ---
+  /// Permite vender por debajo de cero. Desactivado por defecto: evita
+  /// inventarios imposibles. Configurable porque algunos giros lo necesitan.
+  allowNegativeStock Boolean @default(false)
+  /// Umbral global de stock bajo cuando el producto no define el suyo.
+  lowStockThreshold  Int     @default(5000) // 5 unidades, en mili-unidades
+
+  // --- Preparado para CFDI 4.0 (no implementado en el MVP) ---
+  satRegimenFiscal String?
+  satPostalCode    String?
+  cfdiEnabled      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// Tasas de impuesto configurables. NO se asume 16% universal: hay productos
+/// con tasa 0% (alimentos básicos, medicinas) y exentos.
+model TaxRate {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String // "IVA 16%", "IVA 0%", "Exento"
+  /// Basis points. 1600 = 16%. Los exentos usan 0 pero con isExempt=true,
+  /// distinción que sí importa para CFDI.
+  rateBps    Int
+  isExempt   Boolean @default(false)
+  isDefault  Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([businessId, name])
+  @@index([businessId, deletedAt])
+}
+
+/// Métodos de pago como tabla (no enum) para poder agregar "Vales de despensa",
+/// "Mercado Pago", etc. sin migración de esquema.
+model PaymentMethod {
+  id         String  @id @default(uuid())
+  businessId String
+  code       String // CASH, CARD, TRANSFER, OTHER
+  name       String // "Efectivo", "Tarjeta", ...
+  /// Si requiere capturar el monto recibido y calcular cambio.
+  requiresChange Boolean @default(false)
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  expenses Expense[]
+
+  @@unique([businessId, code])
+  @@index([businessId, isActive])
+}
+
+/// Contadores atómicos para folios (VTA-000123, CMP-000045).
+/// Se incrementan con UPDATE ... RETURNING dentro de la misma transacción que
+/// crea el documento: no hay carrera posible entre cajas concurrentes.
+model DocumentCounter {
+  id         String @id @default(uuid())
+  businessId String
+  docType    String // SALE, PURCHASE
+  prefix     String
+  nextValue  Int    @default(1)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, docType])
+}
+
+// =============================================================================
+// USUARIOS, ROLES Y SESIONES
+// =============================================================================
+
+/// RBAC simple pero real: el rol lleva una lista de permisos en formato
+/// "recurso:acción" (p.ej. "sales:create"). Agregar un permiso nuevo no
+/// requiere migración, y un rol custom es una fila más.
+model Role {
+  id          String   @id @default(uuid())
+  businessId  String
+  key         String // ADMIN, MANAGER, EMPLOYEE
+  name        String
+  description String?
+  permissions String[] @default([])
+  /// Los roles de sistema no se pueden borrar desde la UI.
+  isSystem    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  users    User[]
+
+  @@unique([businessId, key])
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(uuid())
+  businessId   String
+  email        String
+  name         String
+  passwordHash String
+  roleId       String
+  status       UserStatus @default(ACTIVE)
+
+  lastLoginAt     DateTime?
+  /// Intentos fallidos consecutivos; alimenta el bloqueo temporal por fuerza bruta.
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role     Role      @relation(fields: [roleId], references: [id])
+  sessions Session[]
+
+  sales              Sale[]
+  purchases          Purchase[]
+  expenses           Expense[]
+  inventoryMovements InventoryMovement[]
+  auditLogs          AuditLog[]
+  feedbackItems      FeedbackItem[]
+
+  @@unique([businessId, email])
+  @@index([businessId, deletedAt])
+}
+
+/// Sesiones opacas en base de datos (no JWT autocontenido).
+/// Motivo: revocación inmediata, "cerrar sesión en todos los dispositivos",
+/// y visibilidad real de quién está conectado — requisito del punto 18.
+/// En la cookie viaja un token aleatorio; aquí solo vive su SHA-256.
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  ip        String?
+  userAgent String?
+  lastSeenAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+// =============================================================================
+// CATÁLOGOS
+// =============================================================================
+
+model Category {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String
+  color      String? // Etiqueta visual opcional
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([businessId, name])
+  @@index([businessId, deletedAt])
+}
+
+model Supplier {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String
+  contact    String?
+  phone      String?
+  email      String?
+  rfc        String?
+  address    String?
+  notes      String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business  Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products  Product[]
+  purchases Purchase[]
+
+  @@index([businessId, deletedAt])
+  @@index([businessId, name])
+}
+
+enum UnitOfMeasure {
+  PIECE
+  KG
+  G
+  L
+  ML
+  BOX
+  PACK
+  SERVICE
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Product {
+  id         String  @id @default(uuid())
+  businessId String
+  sku        String
+  barcode    String?
+  name       String
+  description String?
+
+  categoryId String?
+  supplierId String?
+  taxRateId  String?
+
+  /// Precio de venta unitario en centavos.
+  priceCents Int
+  /// Costo unitario en centavos (último costo conocido; el histórico real vive
+  /// en PurchaseItem).
+  costCents  Int           @default(0)
+
+  unit UnitOfMeasure @default(PIECE)
+
+  /// Existencia actual en mili-unidades. Es una CACHÉ denormalizada: la verdad
+  /// reconstruible es SUM(InventoryMovement.quantityDelta). Se actualiza solo
+  /// dentro de transacciones con bloqueo de fila (SELECT ... FOR UPDATE).
+  stock            Int @default(0)
+  /// Punto de reorden en mili-unidades. Null => usa el umbral global.
+  minStock         Int?
+
+  /// Los servicios y similares no descuentan inventario.
+  tracksInventory Boolean       @default(true)
+  status          ProductStatus @default(ACTIVE)
+
+  // --- Preparado para CFDI (nullable, se llena progresivamente) ---
+  satProductCode String? // Clave producto/servicio SAT
+  satUnitCode    String? // Clave unidad SAT
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business  Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  Category? @relation(fields: [categoryId], references: [id])
+  supplier  Supplier? @relation(fields: [supplierId], references: [id])
+  taxRate   TaxRate?  @relation(fields: [taxRateId], references: [id])
+
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+  movements     InventoryMovement[]
+
+  @@unique([businessId, sku])
+  @@unique([businessId, barcode])
+  @@index([businessId, deletedAt, status])
+  @@index([businessId, name])
+  @@index([businessId, categoryId])
+}
+
+model Customer {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String
+  phone      String?
+  email      String?
+  notes      String?
+
+  // --- Datos fiscales, opcionales (CFDI futuro) ---
+  rfc              String?
+  legalName        String? // Razón social
+  satRegimenFiscal String?
+  satUsoCfdi       String?
+  satPostalCode    String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales    Sale[]
+
+  @@index([businessId, deletedAt])
+  @@index([businessId, name])
+}
+
+// =============================================================================
+// VENTAS
+// =============================================================================
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+}
+
+model Sale {
+  id         String @id @default(uuid())
+  businessId String
+  /// Folio legible y consecutivo: VTA-000123
+  folio      String
+
+  customerId String?
+  userId     String // Quién la registró
+
+  status SaleStatus @default(COMPLETED)
+
+  /// Suma de líneas SIN impuesto, en centavos.
+  subtotalCents Int
+  /// Descuento a nivel documento, en centavos.
+  discountCents Int @default(0)
+  /// Suma de impuestos de todas las líneas, en centavos.
+  taxCents      Int
+  /// subtotal - descuento + impuesto
+  totalCents    Int
+
+  notes String?
+
+  /// Clave de idempotencia enviada por el cliente. Impide que un doble clic o
+  /// un reintento de red generen dos ventas idénticas.
+  idempotencyKey String? @unique
+
+  // --- Cancelación (nunca se borra una venta) ---
+  voidedAt     DateTime?
+  voidedByUserId String?
+  voidReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  items     SaleItem[]
+  payments  Payment[]
+  movements InventoryMovement[]
+
+  @@unique([businessId, folio])
+  @@index([businessId, createdAt])
+  @@index([businessId, status, createdAt])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id     String @id @default(uuid())
+  saleId String
+
+  productId String
+  /// Copia del nombre y SKU al momento de la venta. Si el producto se renombra
+  /// o se borra, el ticket histórico sigue siendo fiel a lo que se vendió.
+  productName String
+  productSku  String
+
+  /// Mili-unidades.
+  quantity       Int
+  /// Precio unitario tal como se capturó/mostró al cobrar.
+  unitPriceCents Int
+  /// Si `unitPriceCents` ya traía el impuesto dentro. Se congela por línea:
+  /// cambiar la configuración del negocio mañana no debe alterar la
+  /// interpretación de un ticket de ayer.
+  priceIncludesTax Boolean @default(true)
+  /// Costo unitario al momento de la venta (para margen histórico).
+  unitCostCents  Int  @default(0)
+  discountCents  Int  @default(0)
+  /// Tasa aplicada, congelada. Si mañana cambia el IVA, el histórico no muta.
+  taxRateBps     Int  @default(0)
+
+  subtotalCents Int // quantity * unitPrice - discount
+  taxCents      Int
+  totalCents    Int
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model Payment {
+  id     String @id @default(uuid())
+  saleId String
+
+  paymentMethodId String
+  amountCents     Int
+  /// Efectivo recibido (solo aplica a métodos con cambio).
+  receivedCents   Int?
+  changeCents     Int?
+  reference       String? // Autorización de tarjeta, folio de transferencia
+
+  createdAt DateTime @default(now())
+
+  sale   Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  method PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([saleId])
+}
+
+// =============================================================================
+// COMPRAS
+// =============================================================================
+
+enum PurchaseStatus {
+  DRAFT
+  RECEIVED
+  VOIDED
+}
+
+model Purchase {
+  id         String @id @default(uuid())
+  businessId String
+  folio      String
+
+  supplierId String?
+  userId     String
+
+  status PurchaseStatus @default(RECEIVED)
+
+  subtotalCents Int
+  taxCents      Int
+  totalCents    Int
+
+  invoiceNumber String? // Folio de la factura del proveedor
+  notes         String?
+  /// Fecha del documento del proveedor (puede diferir de createdAt).
+  purchasedAt   DateTime @default(now())
+
+  idempotencyKey String? @unique
+
+  voidedAt       DateTime?
+  voidedByUserId String?
+  voidReason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  items     PurchaseItem[]
+  movements InventoryMovement[]
+
+  @@unique([businessId, folio])
+  @@index([businessId, purchasedAt])
+  @@index([businessId, status])
+  @@index([supplierId])
+}
+
+model PurchaseItem {
+  id         String @id @default(uuid())
+  purchaseId String
+
+  productId   String
+  productName String
+  productSku  String
+
+  quantity      Int // mili-unidades
+  unitCostCents Int
+  /// Los costos de proveedor normalmente se capturan SIN impuesto, pero se
+  /// congela por línea igual que en las ventas.
+  costIncludesTax Boolean @default(false)
+  taxRateBps    Int @default(0)
+
+  subtotalCents Int
+  taxCents      Int
+  totalCents    Int
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+// =============================================================================
+// INVENTARIO — LIBRO MAYOR
+// =============================================================================
+
+enum MovementType {
+  INITIAL // Carga inicial de existencias
+  ENTRY // Entrada manual
+  EXIT // Salida manual (merma, consumo interno)
+  ADJUSTMENT // Ajuste por conteo físico
+  SALE // Descuento por venta
+  PURCHASE // Alta por compra
+  RETURN // Devolución de cliente
+  SALE_VOID // Reversa por cancelación de venta
+  PURCHASE_VOID // Reversa por cancelación de compra
+}
+
+/// Libro mayor de inventario: append-only. Nunca se edita ni se borra una fila.
+/// Product.stock es solo la caché; este historial es la verdad y permite
+/// reconstruir la existencia a cualquier fecha pasada.
+model InventoryMovement {
+  id         String @id @default(uuid())
+  businessId String
+  productId  String
+
+  type MovementType
+
+  /// Cambio con signo, en mili-unidades. Negativo = salida.
+  quantityDelta Int
+  /// Existencia resultante después de aplicar el movimiento. Snapshot que hace
+  /// auditable la secuencia sin recalcular toda la historia.
+  balanceAfter  Int
+
+  /// Costo unitario asociado (compras, ajustes valorados).
+  unitCostCents Int?
+
+  // --- Trazabilidad al documento origen ---
+  saleId     String?
+  purchaseId String?
+  reason     String?
+
+  userId String?
+
+  createdAt DateTime @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product   @relation(fields: [productId], references: [id])
+  sale     Sale?     @relation(fields: [saleId], references: [id])
+  purchase Purchase? @relation(fields: [purchaseId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([productId, createdAt])
+  @@index([businessId, type, createdAt])
+  @@index([saleId])
+  @@index([purchaseId])
+}
+
+// =============================================================================
+// GASTOS
+// =============================================================================
+
+model ExpenseCategory {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String
+  color      String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([businessId, name])
+  @@index([businessId, deletedAt])
+}
+
+model Expense {
+  id         String @id @default(uuid())
+  businessId String
+
+  categoryId      String?
+  paymentMethodId String?
+  userId          String
+
+  description String
+  amountCents Int
+  /// Fecha real del gasto (puede ser retroactiva).
+  spentAt     DateTime @default(now())
+  reference   String?
+  notes       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  method   PaymentMethod?   @relation(fields: [paymentMethodId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+
+  @@index([businessId, spentAt])
+  @@index([businessId, deletedAt])
+  @@index([categoryId])
+}
+
+// =============================================================================
+// AUDITORÍA
+// =============================================================================
+
+/// Bitácora append-only. Las operaciones críticas escriben aquí DENTRO de la
+/// misma transacción que las ejecuta: si la operación revierte, el log también.
+model AuditLog {
+  id         String @id @default(uuid())
+  businessId String
+
+  userId String?
+  /// Copia del nombre por si el usuario se desactiva o renombra después.
+  userName String?
+
+  /// Verbo en formato "recurso.acción": sale.create, product.update,
+  /// inventory.adjust, sale.void, expense.create, auth.login...
+  action String
+
+  entityType String // Sale, Product, InventoryMovement...
+  entityId   String?
+
+  /// Estado previo y posterior. Solo campos relevantes, nunca secretos.
+  before Json?
+  after  Json?
+
+  /// Contexto adicional (folio, motivo, importe).
+  metadata Json?
+
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([businessId, entityType, entityId])
+  @@index([businessId, action, createdAt])
+  @@index([userId, createdAt])
+}
+
+// =============================================================================
+// FEEDBACK DE LA DEMO
+// =============================================================================
+
+enum FeedbackStatus {
+  PENDING
+  REVIEWING
+  APPROVED
+  IMPLEMENTED
+  DISCARDED
+}
+
+enum FeedbackPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum FeedbackKind {
+  COMMENT // Comentario sobre algo existente
+  NEW_ELEMENT // "Quiero un botón aquí"
+  BUG
+  IDEA
+}
+
+/// Anotaciones que el cliente deja directamente sobre la interfaz durante la
+/// demo. Es una herramienta de comunicación: el sistema NO modifica la UI.
+model FeedbackItem {
+  id         String @id @default(uuid())
+  businessId String
+
+  kind     FeedbackKind     @default(COMMENT)
+  priority FeedbackPriority @default(MEDIUM)
+  status   FeedbackStatus   @default(PENDING)
+
+  title       String
+  description String?
+
+  // --- Anclaje en la interfaz ---
+  route          String // /ventas/nueva
+  /// Etiqueta legible del componente señalado ("Botón Cobrar").
+  elementLabel   String?
+  /// Ruta CSS/testid del elemento, para poder reencontrarlo.
+  elementPath    String?
+  /// Rectángulo dibujado por el cliente: { x, y, width, height } en px de página.
+  anchorRect     Json?
+  viewportWidth  Int?
+  viewportHeight Int?
+
+  /// Propuesta del cliente para un elemento nuevo: BUTTON, FIELD, TABLE, ...
+  proposedElement String?
+
+  /// Notas internas del equipo de desarrollo (no las ve el cliente).
+  internalNotes String?
+  resolvedAt    DateTime?
+
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy  User?               @relation(fields: [createdByUserId], references: [id])
+  screenshot FeedbackScreenshot?
+
+  @@index([businessId, status, priority])
+  @@index([businessId, createdAt])
+  @@index([businessId, route])
+}
+
+/// Tabla aparte para que listar feedback no arrastre blobs de imagen.
+model FeedbackScreenshot {
+  id         String @id @default(uuid())
+  feedbackId String @unique
+
+  mimeType  String @default("image/png")
+  sizeBytes Int
+  data      Bytes
+
+  createdAt DateTime @default(now())
+
+  feedback FeedbackItem @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================================
+// CUESTIONARIO DE DESCUBRIMIENTO
+// =============================================================================
+
+/// Respuestas al cuestionario "Configuración y análisis del negocio".
+/// Las respuestas se guardan como JSON versionado: agregar o quitar preguntas
+/// no requiere migración, y las respuestas viejas siguen siendo interpretables
+/// porque conservan la versión del formulario con la que se capturaron.
+model DiscoveryResponse {
+  id         String @id @default(uuid())
+  businessId String
+
+  formVersion Int  @default(1)
+  /// { businessType: "abarrotes", employees: 4, salesPerDay: 120, ... }
+  answers     Json
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
