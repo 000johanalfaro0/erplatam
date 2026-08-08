@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import {
-  Bricolage_Grotesque,
   Caveat,
+  Geist,
+  IBM_Plex_Sans,
   Inter,
-  Source_Serif_4,
+  Public_Sans,
 } from "next/font/google";
 
 import { Providers } from "@/components/providers";
@@ -29,16 +30,34 @@ const inter = Inter({
   display: "swap",
 });
 
-/** Dirección "Mostrador": grotesca con carácter, no la Inter de todos. */
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-bricolage",
+/**
+ * Las tres tipografías de las direcciones visuales.
+ *
+ * La versión anterior usaba una grotesca de display y una monoespaciada, y el
+ * cliente dijo que eran "poco serias". Tenía razón: son letras que llaman la
+ * atención sobre sí mismas, y esto es una herramienta con la que alguien pasa
+ * ocho horas mirando cifras. Las tres de ahora vienen de sistemas de diseño
+ * de trabajo y ninguna se hace notar.
+ */
+
+/** "Tablero": la del sistema de diseño del gobierno de EE. UU. Sobria. */
+const publicSans = Public_Sans({
+  variable: "--font-public-sans",
   subsets: ["latin"],
   display: "swap",
 });
 
-/** Dirección "Libro": serifa de texto con pesos reales y cifras alineadas. */
-const sourceSerif = Source_Serif_4({
-  variable: "--font-serif-libro",
+/** "Barra": heredera de la tipografía corporativa de IBM. Institucional. */
+const plex = IBM_Plex_Sans({
+  variable: "--font-plex",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
+
+/** "Carril": moderna y neutra, con cifras tabulares muy limpias. */
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
   display: "swap",
 });
@@ -65,20 +84,13 @@ const caveat = Caveat({
  * recuerda. Además así el login también respeta la dirección, y el login es
  * la primera pantalla que va a ver.
  */
-const DIRECCIONES = JSON.stringify(
-  Object.fromEntries(
-    THEMES.map((t) => [t.id, { v: t.tokens, f: t.fuente }]),
-  ),
-);
+const IDS_VALIDOS = JSON.stringify(THEMES.map((t) => t.id));
 
 const SCRIPT_DIRECCION = `(function(){try{
-var d=${DIRECCIONES},r=document.documentElement;
-var id=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)})||${JSON.stringify(DEFAULT_THEME_ID)};
-var t=d[id]||d[${JSON.stringify(DEFAULT_THEME_ID)}];
-for(var k in t.v)r.style.setProperty(k,t.v[k]);
-r.style.setProperty('--font-sans',t.f);
-r.dataset.direccion=id;
-}catch(e){}})()`;
+var v=${IDS_VALIDOS};
+var id=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+document.documentElement.dataset.direccion=v.indexOf(id)>=0?id:${JSON.stringify(DEFAULT_THEME_ID)};
+}catch(e){document.documentElement.dataset.direccion=${JSON.stringify(DEFAULT_THEME_ID)}}})()`;
 
 export const metadata: Metadata = {
   title: {
@@ -102,7 +114,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es-MX"
-      className={`${inter.variable} ${bricolage.variable} ${sourceSerif.variable} ${caveat.variable} h-full`}
+      className={`${inter.variable} ${publicSans.variable} ${plex.variable} ${geist.variable} ${caveat.variable} h-full`}
       suppressHydrationWarning
     >
       <head>

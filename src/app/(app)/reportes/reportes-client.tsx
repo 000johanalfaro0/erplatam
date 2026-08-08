@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Download } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import * as React from "react";
 
+import { ExportButton } from "@/components/export-button";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { type Column, DataTable } from "@/components/ui/data-table";
@@ -122,18 +123,6 @@ export function ReportesClient({
         : undefined,
   });
 
-  function exportar() {
-    // Se navega a la URL con format=csv: el navegador gestiona la descarga
-    // nativa, con su barra de progreso y su carpeta de destino. Construir el
-    // archivo en memoria y forzar un enlace sería peor experiencia y peor uso
-    // de memoria con reportes grandes.
-    const params = new URLSearchParams({
-      ...(query as Record<string, string>),
-      format: "csv",
-    });
-    window.location.href = `/api/v1/reports?${params}`;
-  }
-
   return (
     <>
       <PageHeader
@@ -141,10 +130,18 @@ export function ReportesClient({
         description={config.question}
         actions={
           type !== "summary" && (
-            <Button variant="secondary" onClick={exportar}>
-              <Download />
-              Exportar a Excel
-            </Button>
+            /*
+             * Antes esto decía "Exportar a Excel" y descargaba un CSV. Se abre
+             * en Excel, sí, pero llega sin formato: los importes como texto,
+             * las fechas interpretadas según el idioma del equipo y los
+             * acentos rotos al abrirlo con doble clic. Ahora es un .xlsx de
+             * verdad, con números que suman y totales con fórmula.
+             */
+            <ExportButton
+              endpoint="/reports"
+              etiqueta="Exportar a Excel"
+              filtros={{ ...(query as Record<string, string>), format: "xlsx" }}
+            />
           )
         }
       />

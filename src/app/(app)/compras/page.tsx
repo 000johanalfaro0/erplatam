@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Ban,
+  PackagePlus,
   Plus,
   Search,
   Trash2,
@@ -60,6 +61,21 @@ interface Linea {
   taxRateBps: number;
   quantity: number;
   unitCostCents: number;
+}
+
+/**
+ * SKU para un producto dado de alta desde una compra.
+ *
+ * Se genera y no se pregunta: el SKU es un identificador interno y quien está
+ * descargando un camión no tiene ninguno en la cabeza. Se puede cambiar
+ * después en Inventario, que es donde tiene sentido pensarlo.
+ *
+ * Vive fuera del componente porque `Date.now()` es impuro y el compilador de
+ * React lo marca si aparece en el cuerpo de un componente, aunque esté dentro
+ * de una función diferida.
+ */
+function skuProvisional(): string {
+  return `NUE-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 }
 
 export default function ComprasPage() {
@@ -124,9 +140,17 @@ export default function ComprasPage() {
           costCents: number;
           taxRate: { rateBps: number } | null;
         }[];
-      }>("/products", { search: debouncedBuscar, pageSize: 6 }),
+      }>("/products", {
+        search: debouncedBuscar || undefined,
+        pageSize: 8,
+        sortBy: "name",
+        sortDir: "asc",
+      }),
     select: (r) => r.items,
-    enabled: formOpen && debouncedBuscar.length >= 2,
+    // Sin texto se enseña el catálogo. Antes hacía falta escribir dos letras
+    // para que apareciera nada, y con el formulario recién abierto no había
+    // ni lista ni pista de qué escribir: parecía que el buscador no servía.
+    enabled: formOpen,
   });
 
   /**
@@ -207,6 +231,49 @@ export default function ComprasPage() {
         { duration: 12000 },
       );
     },
+  });
+
+  /**
+   * Da de alta un producto desde la propia compra y lo agrega a las líneas.
+   *
+   * POR QUÉ EXISTE: llega mercancía que no está en el catálogo, y ese es el
+   * caso normal, no la excepción. Obligar a salirse de la compra, ir a
+   * inventario, crear el producto y volver a empezar es la clase de fricción
+   * por la que se acaba capturando todo en un cuaderno.
+   *
+   * QUÉ SE INVENTA Y QUÉ NO: el SKU se genera —es un identificador interno,
+   * y pedirlo aquí sería preguntar por algo que a esta persona le da igual—.
+   * El precio de venta NO: se queda a cero, porque ponerlo a ojo mientras se
+   * descarga un camión es cómo se acaba vendiendo a pérdida. El costo lo
+   * pone la propia línea de compra, que es exactamente el dato que se tiene
+   * delante en ese momento.
+   */
+  const crearYAgregar = useMutation({
+    mutationFn: (nombre: string) =>
+      api.post<{
+        id: string;
+        sku: string;
+        name: string;
+        costCents: number;
+        taxRate: { rateBps: number } | null;
+      }>("/products", {
+        name: nombre.trim(),
+        sku: skuProvisional(),
+        priceCents: 0,
+        costCents: 0,
+        unit: "PIECE",
+        tracksInventory: true,
+      }),
+    onSuccess: (producto) => {
+      agregar(producto);
+      setBuscar("");
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["compras-productos"] });
+      toast.success(`"${producto.name}" creado y agregado`, {
+        description: "Ponle precio de venta en Inventario cuando puedas.",
+      });
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   function agregar(producto: {
@@ -491,9 +558,52 @@ export default function ComprasPage() {
                 />
               </div>
 
-              {debouncedBuscar.length >= 2 && (productos?.length ?? 0) > 0 && (
-                <ul className="mt-1.5 overflow-hidden rounded-md border border-line">
-                  {productos?.map((p) => (
+              <ul className="mt-1.5 overflow-hidden rounded-md border border-line">
+                {/*
+                  Alta al vuelo.
+                  Llega mercancía que no está en el catálogo: es el caso
+                  normal, no la excepción. Obligar a salirse de la compra,
+                  ir a inventario, crear el producto y volver a empezar es
+                  la clase de fricción por la que se acaba capturando todo
+                  en un cuaderno.
+                */}
+                {debouncedBuscar.length >= 2 &&
+                  !productos?.some(
+                    (p) =>
+                      p.name.toLowerCase() === debouncedBuscar.toLowerCase(),
+                  ) && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => crearYAgregar.mutate(debouncedBuscar)}
+                        disabled={crearYAgregar.isPending}
+                        className="flex w-full items-center gap-3 border-b border-line bg-accent-soft px-3 py-2.5 text-left transition-colors hover:bg-accent-soft/70 disabled:opacity-60"
+                      >
+                        <PackagePlus
+                          className="size-4 shrink-0 text-accent"
+                          aria-hidden
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-accent">
+                            Crear “{debouncedBuscar}”
+                          </span>
+                          <span className="block text-[12px] text-ink-muted">
+                            Se da de alta en el catálogo y se agrega a esta
+                            compra. El precio de venta se pone después.
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  )}
+
+                {(productos?.length ?? 0) === 0 && !debouncedBuscar && (
+                  <li className="px-3 py-4 text-center text-[13px] text-ink-subtle">
+                    No hay productos en el catálogo todavía. Escribe un nombre
+                    para crear el primero.
+                  </li>
+                )}
+
+                {productos?.map((p) => (
                     <li key={p.id}>
                       <button
                         type="button"
@@ -514,9 +624,8 @@ export default function ComprasPage() {
                         </span>
                       </button>
                     </li>
-                  ))}
-                </ul>
-              )}
+                ))}
+              </ul>
             </div>
 
             {/* --- Líneas --- */}

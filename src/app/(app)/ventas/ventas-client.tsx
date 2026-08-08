@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/overlay";
+import { ExportButton } from "@/components/export-button";
 import { Badge, EmptyState, PageHeader } from "@/components/ui/surface";
 import { ApiError, api, type Paginated } from "@/lib/api";
 import { money, dateRelative, quantity, percent } from "@/lib/format";
@@ -261,14 +262,25 @@ export function VentasClient({
         title="Ventas"
         description="Historial de ventas registradas."
         actions={
-          canCreate && (
-            <Button variant="primary" asChild>
-              <Link href="/ventas/nueva">
-                <Plus />
-                Nueva venta
-              </Link>
-            </Button>
-          )
+          <>
+            <ExportButton
+              endpoint="/sales/export"
+              filtros={{
+                search: debouncedSearch,
+                status,
+                from: dateFrom ? `${dateFrom}T00:00:00.000Z` : undefined,
+                to: dateTo ? `${dateTo}T23:59:59.999Z` : undefined,
+              }}
+            />
+            {canCreate && (
+              <Button variant="primary" asChild>
+                <Link href="/ventas/nueva">
+                  <Plus />
+                  Nueva venta
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 

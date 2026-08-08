@@ -40,19 +40,12 @@ async function main() {
   await page.waitForTimeout(900);
 
   for (const theme of THEMES) {
-    // Se aplica directamente, como haría el conmutador.
-    await page.evaluate(
-      ({ tokens, fuente, id }) => {
-        const raiz = document.documentElement;
-        for (const [k, v] of Object.entries(tokens)) {
-          raiz.style.setProperty(k, v as string);
-        }
-        raiz.style.setProperty("--font-sans", fuente);
-        raiz.dataset.direccion = id;
-        localStorage.setItem("erp-direccion-visual", id);
-      },
-      { tokens: theme.tokens, fuente: theme.fuente, id: theme.id },
-    );
+    // Se aplica igual que el conmutador: un atributo. Los colores, la
+    // tipografía y el ancho viven en globals.css.
+    await page.evaluate((id) => {
+      document.documentElement.dataset.direccion = id;
+      localStorage.setItem("erp-direccion-visual", id);
+    }, theme.id);
 
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${OUT}/50-direccion-${theme.id}.png` });

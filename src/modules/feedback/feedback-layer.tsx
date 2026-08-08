@@ -67,6 +67,8 @@ interface NotaUbicada {
 const ANCHO_NOTA = 224;
 /** Alto mínimo del papel. Un post-it es casi cuadrado, no una tira. */
 const ALTO_NOTA = 128;
+/** Alto aproximado del papel mientras se escribe, con sus botones. */
+const ALTO_BORRADOR = 210;
 const SEPARACION = 12;
 
 export function FeedbackLayer() {
@@ -77,6 +79,9 @@ export function FeedbackLayer() {
   const [borrador, setBorrador] = React.useState<{
     ancla: ElementAnchor;
     texto: string;
+    /** Coordenadas de viewport del clic que la originó. */
+    left: number;
+    top: number;
   } | null>(null);
   const [ubicadas, setUbicadas] = React.useState<NotaUbicada[]>([]);
 
@@ -184,7 +189,28 @@ export function FeedbackLayer() {
       event.preventDefault();
       event.stopPropagation();
 
-      setBorrador({ ancla: crearAncla(target), texto: "" });
+      /*
+       * La nota se abre DONDE SE HIZO CLIC, no centrada en la pantalla.
+       *
+       * Centrada obligaba a mirar a otro sitio para escribir y volver para
+       * comprobar qué se había señalado. Con el papel junto al dedo, señalar
+       * y escribir son el mismo gesto, que es lo que hace que alguien deje
+       * cinco notas en lugar de una.
+       *
+       * Se acota al viewport para que un clic cerca del borde derecho o de
+       * abajo no deje el papel medio fuera.
+       */
+      const margen = 12;
+      const left = Math.min(
+        Math.max(margen, event.clientX + 14),
+        window.innerWidth - ANCHO_NOTA - margen,
+      );
+      const top = Math.min(
+        Math.max(margen, event.clientY - 16),
+        window.innerHeight - ALTO_BORRADOR - margen,
+      );
+
+      setBorrador({ ancla: crearAncla(target), texto: "", left, top });
     }
 
     // `capture: true` para llegar antes que los manejadores de la aplicación.
@@ -336,11 +362,11 @@ export function FeedbackLayer() {
           // Semilla fija: mientras se escribe, el papel no debe cambiar de
           // color ni de inclinación con cada tecla.
           semilla="borrador"
-          className="fixed left-1/2 top-1/2 z-100 w-72 px-4 pb-3 pt-4"
+          className="fixed z-100 px-4 pb-3 pt-4"
           style={{
-            // La rotación de PostIt se combina con el centrado; si no se
-            // compone aquí, el papel se iría a la esquina superior izquierda.
-            transform: `translate(-50%, -50%) rotate(${papelDe("borrador").giro}deg)`,
+            left: borrador.left,
+            top: borrador.top,
+            width: ANCHO_NOTA,
           }}
         >
           <p className="mb-2 text-[12px] font-medium text-[#2b2a24]/60">

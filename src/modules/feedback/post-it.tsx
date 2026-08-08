@@ -14,8 +14,6 @@ import { cn } from "@/lib/utils";
  *     que el cerebro lo clasifique como "componente de interfaz".
  *   · SIN BORDE. El papel no tiene trazo de 1px. Lo que define su silueta es
  *     la sombra, no una línea.
- *   · ROTACIÓN. Nadie pega un papel perfectamente recto. Un par de grados de
- *     inclinación es la señal más barata y más eficaz de las cinco.
  *   · LA BANDA DE PEGAMENTO. La franja superior refleja distinto porque
  *     debajo hay adhesivo. Se imita con una sombra interior en el borde de
  *     arriba, y es lo que da la sensación de "pegado", no de "flotando".
@@ -44,9 +42,8 @@ const PAPELES = [
 /**
  * Hash estable de la cadena.
  *
- * El color y la inclinación se derivan del identificador de la nota, no de
- * `Math.random()`. Si fueran aleatorios, cada re-render giraría los papeles y
- * la pantalla parecería estar temblando.
+ * El color se deriva del identificador de la nota, no de `Math.random()`. Si
+ * fuera aleatorio, cada re-render repintaría los papeles de otro color.
  */
 function hash(texto: string): number {
   let h = 0;
@@ -56,12 +53,20 @@ function hash(texto: string): number {
   return Math.abs(h);
 }
 
+/**
+ * SIN ROTACIÓN, a petición del cliente.
+ *
+ * La inclinación de un par de grados era la señal más eficaz de "papel", pero
+ * sobre una tabla de datos alineada compite con la propia interfaz: el ojo
+ * usa las líneas rectas de la tabla como referencia y todo lo que no es
+ * paralelo se lee como error de renderizado, no como papel. El realismo que
+ * gana no compensa el desorden que introduce.
+ *
+ * Lo que sostiene la ilusión son las otras cuatro señales: esquinas rectas,
+ * sin borde, banda de pegamento y sombra asimétrica.
+ */
 export function papelDe(semilla: string) {
-  const h = hash(semilla);
-  const papel = PAPELES[h % PAPELES.length];
-  // De -2.6° a +2.6°, en pasos irregulares para que no se note el patrón.
-  const giro = ((h % 27) - 13) / 5;
-  return { ...papel, giro };
+  return PAPELES[hash(semilla) % PAPELES.length];
 }
 
 export function PostIt({
@@ -71,7 +76,7 @@ export function PostIt({
   children,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { semilla: string }) {
-  const { base, claro, canto, giro } = papelDe(semilla);
+  const { base, claro, canto } = papelDe(semilla);
 
   return (
     <div
@@ -94,7 +99,6 @@ export function PostIt({
           // Canto inferior, para que el papel tenga grosor.
           `inset 0 -2px 0 0 ${canto}55`,
         ].join(", "),
-        transform: `rotate(${giro}deg)`,
         ...style,
       }}
       {...props}

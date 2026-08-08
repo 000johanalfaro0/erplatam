@@ -29,21 +29,23 @@ import { getReferenceData } from "@/server/modules/reference";
  * Aviso de puerta abierta.
  *
  * Mientras `DEMO_ACCESO_LIBRE` esté puesta, cualquiera con la URL entra sin
- * contraseña. Eso tiene que verse desde la primera pantalla y en todas: un
- * agujero que no se nota es el que se queda abierto seis meses.
+ * contraseña. Eso tiene que verse: un agujero que no se nota es el que se
+ * queda abierto seis meses.
+ *
+ * Dice solo "Acceso abierto", a petición del cliente. La explicación larga
+ * —quién eres y cómo cerrarlo— pasa al atributo `title`: sigue estando a un
+ * gesto de distancia para quien la necesite, sin ocupar una franja entera de
+ * pantalla en cada módulo delante de quien viene a ver el producto.
  */
 function AvisoAccesoLibre({ usuario }: { usuario: string }) {
   return (
     <div
       role="status"
-      className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-ink"
+      title={`Cualquiera con este enlace entra sin contraseña, como ${usuario}. Para cerrarlo, quita DEMO_ACCESO_LIBRE de las variables de Vercel.`}
+      className="mb-4 inline-flex items-center gap-1.5 rounded-md border border-warning/40 bg-warning-soft px-2.5 py-1 text-[12px] font-medium text-warning"
     >
-      <span className="font-medium text-warning">Acceso abierto</span>
-      <span className="text-ink-muted">
-        Cualquiera con este enlace entra sin contraseña, como {usuario}. Para
-        cerrarlo, quita <code className="font-mono text-[12px]">DEMO_ACCESO_LIBRE</code>{" "}
-        de las variables de Vercel.
-      </span>
+      <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+      Acceso abierto
     </div>
   );
 }

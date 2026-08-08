@@ -10,6 +10,20 @@ import { z } from "zod";
  */
 
 export const MAX_PAGE_SIZE = 100;
+
+/**
+ * Tope para las exportaciones a Excel.
+ *
+ * Más alto que `MAX_PAGE_SIZE` y a propósito. El techo de 100 protege a la
+ * API pública de que alguien pida un millón de filas por accidente; una
+ * exportación es otra cosa: se pide una vez, a mano, y devolver "los primeros
+ * 100 gastos" en un archivo que dice "Gastos" sería mentir en silencio.
+ *
+ * NO se pasa por el esquema de Zod —ahí el máximo sigue siendo 100—, sino que
+ * se impone en la ruta de exportación después de validar el resto de filtros.
+ * Así el límite público no se relaja para nadie más.
+ */
+export const MAX_EXPORT_SIZE = 5000;
 export const DEFAULT_PAGE_SIZE = 25;
 
 export const paginationSchema = z.object({

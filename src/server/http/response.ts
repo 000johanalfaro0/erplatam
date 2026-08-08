@@ -165,10 +165,64 @@ export function route<Args extends unknown[]>(
  * Lee y valida el cuerpo JSON de una petición.
  * Un cuerpo malformado se convierte en 422, no en 500.
  */
+/**
+ * Carácter de reemplazo de Unicode. Aparece cuando algo intentó decodificar
+ * bytes que no eran UTF-8 válido y no pudo.
+ */
+const REEMPLAZO = "�";
+
+/**
+ * Rechaza texto ya corrompido antes de que llegue a la base de datos.
+ *
+ * POR QUÉ EXISTE: en la base había un cliente llamado "Ferreter�a del Norte"
+ * y otro "Mar�a Gonz�lez". No era un fallo al pintarlos: los bytes guardados
+ * eran literalmente EF BF BD, el carácter de reemplazo. Entraron desde una
+ * consola de pruebas que no mandaba UTF-8, y para cuando llegaron aquí la
+ * letra original ya se había perdido. Fue pérdida de datos silenciosa:
+ * ningún error, nada en la bitácora, y solo se descubrió mirando la pantalla.
+ *
+ * Ningún nombre legítimo de cliente, producto o proveedor lleva este
+ * carácter: solo aparece cuando algo ya se rompió aguas arriba. Rechazarlo
+ * aquí convierte una pérdida silenciosa en un error visible, que es
+ * infinitamente preferible.
+ *
+ * Se comprueba en `readJson` y no en cada esquema porque es el único sitio
+ * por el que pasan todas las escrituras. Una barrera que hay que acordarse
+ * de poner en cada sitio es una barrera que algún día falta.
+ */
+function contieneTextoCorrupto(valor: unknown, profundidad = 0): boolean {
+  if (profundidad > 8) return false;
+
+  if (typeof valor === "string") return valor.includes(REEMPLAZO);
+
+  if (Array.isArray(valor)) {
+    return valor.some((v) => contieneTextoCorrupto(v, profundidad + 1));
+  }
+
+  if (valor !== null && typeof valor === "object") {
+    return Object.values(valor).some((v) =>
+      contieneTextoCorrupto(v, profundidad + 1),
+    );
+  }
+
+  return false;
+}
+
 export async function readJson(request: Request): Promise<unknown> {
+  let cuerpo: unknown;
+
   try {
-    return await request.json();
+    cuerpo = await request.json();
   } catch {
     throw new ValidationError("El cuerpo de la petición no es JSON válido.");
   }
+
+  if (contieneTextoCorrupto(cuerpo)) {
+    throw new ValidationError(
+      "El texto llegó con caracteres corruptos (acentos o Ñ mal codificados). " +
+        "Vuelve a escribirlo; si persiste, el problema está en cómo se envía la petición.",
+    );
+  }
+
+  return cuerpo;
 }

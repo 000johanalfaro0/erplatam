@@ -243,7 +243,22 @@ export async function listFeedback(
 
   const where = {
     businessId: ctx.businessId,
-    ...(input.status ? { status: input.status } : {}),
+    /*
+     * Sin estado pedido, se devuelve todo MENOS lo descartado.
+     *
+     * Antes se devolvía todo, y la capa de anotaciones —que no pide estado—
+     * seguía pintando las notas descartadas. Al pulsar la papelera la nota se
+     * marcaba bien en la base y se quedaba igual en pantalla, así que el
+     * botón parecía roto cuando en realidad había funcionado. Descartar y
+     * seguir viéndolo es la peor combinación posible: el usuario vuelve a
+     * pulsar, y luego duda de si algo se guarda.
+     *
+     * La pantalla de feedback sí pide estado explícito, incluido DISCARDED,
+     * así que su pestaña de descartadas sigue funcionando igual.
+     */
+    ...(input.status
+      ? { status: input.status }
+      : { status: { not: "DISCARDED" as const } }),
     ...(input.priority ? { priority: input.priority } : {}),
     ...(input.kind ? { kind: input.kind } : {}),
     ...(input.route ? { route: input.route } : {}),

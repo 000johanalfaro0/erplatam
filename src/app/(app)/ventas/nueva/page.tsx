@@ -22,7 +22,7 @@ import { Modal, ModalContent } from "@/components/ui/overlay";
 import { Badge, EmptyState, PageHeader } from "@/components/ui/surface";
 import { ApiError, api } from "@/lib/api";
 import { UNIT_LABELS, money, quantity } from "@/lib/format";
-import { useReference } from "@/lib/queries";
+import { useCustomers, useReference } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { ProductSearch } from "@/modules/sales/product-search";
 import { useCart } from "@/modules/sales/use-cart";
@@ -50,6 +50,17 @@ export default function PuntoDeVentaPage() {
   const cart = useCart(business.settings.pricesIncludeTax);
 
   const [customerId, setCustomerId] = React.useState("");
+
+  /**
+   * Clientes del desplegable.
+   *
+   * Faltaban por completo: el `<select>` solo tenía "Público en general" y un
+   * comentario que decía "los clientes se cargan del catálogo". No los
+   * cargaba nadie. Para quien vendía, los clientes que había dado de alta
+   * simplemente no existían al cobrar.
+   */
+  const { data: clientesPagina } = useCustomers({ pageSize: 100 });
+  const clientes = clientesPagina?.items ?? [];
   const [notes, setNotes] = React.useState("");
   const [checkoutOpen, setCheckoutOpen] = React.useState(false);
   const [paymentMethodId, setPaymentMethodId] = React.useState("");
@@ -329,9 +340,16 @@ export default function PuntoDeVentaPage() {
                     value={customerId}
                     onChange={(event) => setCustomerId(event.target.value)}
                   >
+                    {/* Sin cliente la venta es válida: en mostrador, la
+                        mayoría lo son. Por eso va primero y es el valor por
+                        defecto. */}
                     <option value="">Público en general</option>
-                    {/* Los clientes se cargan del catálogo; sin cliente la
-                        venta es válida igualmente. */}
+                    {clientes.map((cliente) => (
+                      <option key={cliente.id} value={cliente.id}>
+                        {cliente.name}
+                        {cliente.rfc ? ` · ${cliente.rfc}` : ""}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

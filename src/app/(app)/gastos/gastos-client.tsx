@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/overlay";
+import { ExportButton } from "@/components/export-button";
 import { Badge, EmptyState, PageHeader } from "@/components/ui/surface";
 import { Stat } from "@/components/ui/stat";
 import { ApiError, api, type Paginated } from "@/lib/api";
@@ -290,12 +291,18 @@ export function GastosClient({
         title="Gastos"
         description="Todo lo que sale y no es mercancía."
         actions={
-          canWrite && (
-            <Button variant="primary" onClick={openNew}>
-              <Wallet />
-              Registrar gasto
-            </Button>
-          )
+          <>
+            <ExportButton
+              endpoint="/expenses/export"
+              filtros={{ search: debounced, categoryId }}
+            />
+            {canWrite && (
+              <Button variant="primary" onClick={openNew}>
+                <Wallet />
+                Registrar gasto
+              </Button>
+            )}
+          </>
         }
       />
 

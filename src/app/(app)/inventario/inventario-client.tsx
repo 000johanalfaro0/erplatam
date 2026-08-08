@@ -25,6 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/overlay";
+import { ExportButton } from "@/components/export-button";
 import { Badge, EmptyState, PageHeader } from "@/components/ui/surface";
 import { ApiError, api, type Paginated } from "@/lib/api";
 import { money, quantity } from "@/lib/format";
@@ -271,18 +272,28 @@ export function InventarioClient({
         title="Inventario"
         description="Catálogo de productos y existencias."
         actions={
-          canWrite && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setEditingId(null);
-                setFormOpen(true);
+          <>
+            <ExportButton
+              endpoint="/products/export"
+              filtros={{
+                search: debouncedSearch,
+                categoryId,
+                lowStock: lowStock || undefined,
               }}
-            >
-              <Package />
-              Nuevo producto
-            </Button>
-          )
+            />
+            {canWrite && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditingId(null);
+                  setFormOpen(true);
+                }}
+              >
+                <Package />
+                Nuevo producto
+              </Button>
+            )}
+          </>
         }
       />
 

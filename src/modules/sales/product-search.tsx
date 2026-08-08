@@ -47,16 +47,29 @@ export function ProductSearch({
     return () => clearTimeout(timer);
   }, [term]);
 
+  /**
+   * Resultados, y el catálogo cuando no se ha escrito nada.
+   *
+   * ANTES: `enabled: debounced.length >= 2`. Con el campo vacío no se pedía
+   * nada y la lista no existía, así que quien abría el punto de venta se
+   * encontraba una caja de texto y ninguna pista de qué escribir. Con una
+   * sola letra tampoco pasaba nada, ni siquiera un aviso. Parecía roto.
+   *
+   * AHORA: sin texto se enseñan los primeros productos por nombre. El
+   * catálogo está a la vista desde el primer momento y escribir lo filtra,
+   * que es lo que hace cualquiera que no se sepa los códigos de memoria.
+   */
   const { data: results = [], isFetching } = useQuery({
     queryKey: ["pos-search", debounced],
     queryFn: () =>
       api.get<{ items: Product[] }>("/products", {
-        search: debounced,
+        search: debounced || undefined,
         status: "ACTIVE",
         pageSize: 8,
+        sortBy: "name",
+        sortDir: "asc",
       }),
     select: (result) => result.items,
-    enabled: debounced.length >= 2,
   });
 
   React.useEffect(() => setHighlighted(0), [results.length]);
@@ -177,16 +190,25 @@ export function ProductSearch({
         )}
       </div>
 
-      {/* Sugerencias */}
-      {debounced.length >= 2 && (
+      {/* Sugerencias. Siempre visibles: con el campo vacío son el catálogo. */}
+      {!disabled && (
         <ul
           id="pos-resultados"
           role="listbox"
+          aria-label={debounced ? "Resultados" : "Productos disponibles"}
           className="absolute inset-x-0 top-full z-30 mt-1.5 max-h-80 overflow-y-auto rounded-lg border border-line bg-surface-raised p-1.5 shadow-overlay scroll-slim"
         >
+          {!debounced && results.length > 0 && (
+            <li className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-subtle">
+              Productos disponibles
+            </li>
+          )}
+
           {results.length === 0 && !isFetching && (
             <li className="px-3 py-6 text-center text-[13px] text-ink-subtle">
-              No hay productos activos que coincidan con “{debounced}”.
+              {debounced
+                ? `No hay productos activos que coincidan con “${debounced}”.`
+                : "No hay productos activos en el catálogo."}
             </li>
           )}
 

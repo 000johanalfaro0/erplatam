@@ -38,16 +38,17 @@ import {
  * principio.
  */
 
-/** Aplica una dirección al documento. */
+/**
+ * Aplica una dirección: un atributo, y ya.
+ *
+ * Antes esto inyectaba cada variable como estilo EN LÍNEA sobre <html>, y
+ * eso rompió el modo oscuro entero: un estilo en línea gana a cualquier hoja
+ * de estilos, así que los colores claros de la dirección pisaban al tema
+ * oscuro y el botón de la luna no cambiaba nada. Con las direcciones escritas
+ * en `globals.css`, la cascada resuelve sola quién manda.
+ */
 function aplicar(theme: Theme) {
-  const raiz = document.documentElement;
-
-  for (const [variable, valor] of Object.entries(theme.tokens)) {
-    raiz.style.setProperty(variable, valor);
-  }
-
-  raiz.style.setProperty("--font-sans", theme.fuente);
-  raiz.dataset.direccion = theme.id;
+  document.documentElement.dataset.direccion = theme.id;
 }
 
 export function ThemeSwitcher() {
@@ -121,7 +122,7 @@ export function ThemeSwitcher() {
                 <span
                   aria-hidden
                   className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-white [&_svg]:size-4"
-                  style={{ backgroundColor: theme.tokens["--color-accent"] }}
+                  style={{ backgroundColor: theme.muestra }}
                   dangerouslySetInnerHTML={{ __html: theme.icono }}
                 />
 

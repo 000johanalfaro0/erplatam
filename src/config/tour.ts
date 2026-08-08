@@ -74,7 +74,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     target: "[data-tour=nav-sales]",
-    route: "/",
+    route: "/ventas",
     title: "Ventas es donde cobras",
     body: "Escaneas o buscas el producto, se arma el ticket y cobras. El sistema calcula el IVA y el cambio. Si tienes lector de código de barras, funciona sin tocar el ratón.",
   },
@@ -86,19 +86,19 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     target: "[data-tour=nav-purchases]",
-    route: "/inventario",
+    route: "/compras",
     title: "Las compras actualizan tu costo",
     body: "Al registrar lo que le compras al proveedor, además de sumar existencia se actualiza cuánto te cuesta cada producto. Por eso el margen que ves es el de hoy y no el de hace seis meses.",
   },
   {
     target: "[data-tour=nav-reports]",
-    route: "/inventario",
+    route: "/reportes",
     title: "Reportes para decidir",
     body: "Cuánto vendiste, qué productos te dejan más ganancia (no los que más se venden: los que más dejan), en qué se te va el dinero y cuánto tienes parado en el almacén. Todo se exporta a Excel.",
   },
   {
     target: "[data-tour=feedback-boton]",
-    route: "/inventario",
+    route: "/",
     title: "Recuerda: cualquier cosa, anótala",
     body: "No te guardes nada. Si algo te parece raro, lento, feo o incompleto, pégale una nota. Eso es exactamente lo que hace útil esta demo.",
     action: "Puedes volver a ver este recorrido cuando quieras, con el botón 🎓",
