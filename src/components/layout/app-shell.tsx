@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { FeedbackLayer } from "@/modules/feedback/feedback-layer";
 import { GuidedTour } from "@/modules/tour/guided-tour";
 
-import { ThemeSwitcher } from "../theme-switcher";
+import { ThemeSwitcher, useBrand } from "../theme-switcher";
 
 import { useSession } from "../session-provider";
 import { Button } from "../ui/button";
@@ -32,6 +32,8 @@ import {
   Modal,
 } from "../ui/overlay";
 import { GlobalSearch } from "./global-search";
+import { NavCarril } from "./nav-carril";
+import { NavSuperior } from "./nav-superior";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -78,6 +80,9 @@ function useTheme() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, business } = useSession();
+  // Dónde vive la navegación en la dirección activa. Es el ÚNICO dato de
+  // dirección visual que llega al JSX; todo lo demás lo resuelve el CSS.
+  const { estructura } = useBrand();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const { theme, toggle } = useTheme();
   const router = useRouter();
@@ -100,9 +105,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     .join("");
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas">
-      {/* Barra lateral fija — escritorio */}
-      <Sidebar className="hidden lg:flex" />
+    <div
+      className={cn(
+        "h-dvh overflow-hidden bg-canvas",
+        // Con la navegación arriba no hay columna lateral que colocar: el
+        // shell pasa de dos columnas a dos filas.
+        estructura === "superior" ? "flex flex-col" : "flex",
+      )}
+    >
+      {/* Navegación de escritorio. Es lo único que se ramifica en JSX; el
+          resto de diferencias entre direcciones vive en globals.css. */}
+      {estructura === "lateral" && <Sidebar className="hidden lg:flex" />}
+      {estructura === "carril" && (
+        <div className="hidden lg:flex">
+          <NavCarril />
+        </div>
+      )}
+      {estructura === "superior" && (
+        <div className="hidden lg:block">
+          <NavSuperior />
+        </div>
+      )}
 
       {/* Barra lateral deslizante — tablet y móvil */}
       <Modal open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -121,6 +144,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DialogPrimitive.Description className="sr-only">
               Secciones disponibles del sistema
             </DialogPrimitive.Description>
+            {/* En móvil TODAS las direcciones usan el panel con etiquetas.
+                Un carril de iconos en una pantalla táctil, donde no hay
+                puntero que se pose y por tanto no hay tooltip, sería un
+                acertijo. La estructura de escritorio no debe imponerse
+                donde su premisa no se cumple. */}
             <Sidebar onNavigate={() => setMobileOpen(false)} />
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
@@ -217,9 +245,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           id="contenido"
           className="scroll-slim min-h-0 flex-1 overflow-y-auto"
         >
-          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
-            {children}
-          </div>
+          {/* `data-contenido` es el gancho: el ancho máximo, el margen
+              lateral y el respiro vertical los pone cada dirección desde
+              globals.css. "Tablero" llega al borde, "Carril" se centra a
+              1080 px. Ver la sección ESTRUCTURA POR DIRECCIÓN. */}
+          <div data-contenido="">{children}</div>
         </main>
       </div>
 

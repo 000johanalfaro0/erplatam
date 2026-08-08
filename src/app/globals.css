@@ -257,6 +257,82 @@
   --color-surface-sunken: oklch(19% 0.009 278);
 }
 
+/* ===========================================================================
+   ESTRUCTURA POR DIRECCIÓN
+   ===========================================================================
+   Aquí es donde las tres dejan de parecerse. La navegación se ramifica en
+   JSX —son tres árboles distintos—, pero el tratamiento del contenido se
+   resuelve desde aquí, y por eso las once pantallas no se tocan: siguen
+   usando `PageHeader`, `Card` y `DataTable` como siempre.
+
+   Los ganchos son atributos de datos que emiten esos tres componentes.
+   Ninguna pantalla sabe qué dirección está activa, así que cambiar de una a
+   otra no puede romper una en concreto.
+   =========================================================================== */
+
+[data-contenido] {
+  width: 100%;
+  max-width: var(--ancho-contenido, 1400px);
+  margin-inline: auto;
+  padding-inline: var(--margen-contenido, 1.5rem);
+  padding-block: var(--respiro-contenido, 1.5rem);
+}
+
+/* --- TABLERO: sin tarjetas, contenido a sangre ----------------------------
+   Las tarjetas pierden borde lateral, radio y sombra: pasan a ser bloques
+   separados por una línea. Cada tarjeta cuesta margen y sombra que no
+   aportan información, y a lo largo de una tabla de inventario eso son dos
+   productos menos a la vista. */
+
+:root[data-direccion="tablero"] [data-superficie="tarjeta"] {
+  border-inline: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Cabecera de una línea, pegada arriba: título y acciones en la misma fila. */
+:root[data-direccion="tablero"] [data-cabecera] {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  align-items: center;
+  margin: calc(var(--respiro-contenido) * -1) 0 0.75rem;
+  padding: 0.625rem var(--margen-contenido, 1rem);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+
+:root[data-direccion="tablero"] [data-cabecera] h1 {
+  font-size: 0.9375rem;
+}
+
+/* La descripción se calla: en una barra de una línea es ruido, y quien lleva
+   un mes usando esto ya sabe qué es "Inventario". */
+:root[data-direccion="tablero"] [data-cabecera-descripcion] {
+  display: none;
+}
+
+/* --- BARRA: tarjetas planas, sin sombra ---------------------------------- */
+
+:root[data-direccion="barra"] [data-superficie="tarjeta"] {
+  box-shadow: none;
+}
+
+/* --- CARRIL: tarjetas de verdad y titular grande ------------------------- */
+
+:root[data-direccion="carril"] [data-superficie="tarjeta"] {
+  box-shadow: var(--shadow-subtle);
+}
+
+:root[data-direccion="carril"] [data-cabecera] {
+  margin-bottom: 1.75rem;
+}
+
+:root[data-direccion="carril"] [data-cabecera] h1 {
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
 @layer base {
   * {
     border-color: var(--color-line);

@@ -19,6 +19,10 @@ export function Card({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
+      // `data-superficie` es el gancho que usa cada dirección visual para
+      // decidir si esto es una tarjeta con sombra, una tarjeta plana o un
+      // bloque a sangre sin borde. La pantalla que la usa no se entera.
+      data-superficie="tarjeta"
       className={cn(
         "bg-surface border border-line rounded-lg shadow-subtle",
         className,
@@ -237,6 +241,9 @@ export function PageHeader({
 }) {
   return (
     <header
+      // Gancho de dirección visual: bloque con título grande y descripción, o
+      // barra de una línea pegada arriba. Ver `globals.css`.
+      data-cabecera=""
       className={cn(
         "flex flex-wrap items-start justify-between gap-4 mb-6",
         className,
@@ -247,7 +254,9 @@ export function PageHeader({
           {title}
         </h1>
         {description && (
-          <p className="mt-1 text-sm text-ink-muted">{description}</p>
+          <p data-cabecera-descripcion="" className="mt-1 text-sm text-ink-muted">
+            {description}
+          </p>
         )}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
