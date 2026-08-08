@@ -36,6 +36,17 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
   APP_URL: z.string().url().default("http://localhost:3000"),
+
+  /**
+   * Puerta abierta para enseñar la demo: correo del usuario con el que entra
+   * cualquiera que abra la URL, sin contraseña.
+   *
+   * Opcional y apagada por defecto. Se declara aquí, y no solo se lee de
+   * `process.env` por ahí suelta, porque una variable que desactiva la
+   * autenticación tiene que estar escrita en el mismo sitio donde alguien
+   * mira para saber qué configura este sistema.
+   */
+  DEMO_ACCESO_LIBRE: z.email().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

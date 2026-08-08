@@ -1,29 +1,40 @@
 /**
  * TRES DIRECCIONES VISUALES
  * ===========================================================================
- * El cliente elige en vivo durante la demo, con un conmutador. Cuando decida,
- * se consolida la elegida y se retiran las otras dos.
+ * El cliente elige en vivo con un conmutador. Cuando decida, se consolida la
+ * elegida y se retiran las otras dos.
  *
- * SON DELIBERADAMENTE DISTINTAS. Tres variaciones del mismo tono no serían una
- * elección real: el cliente diría "cualquiera" y no habríamos aprendido nada.
- * Cada una apuesta por algo diferente y asume el coste de esa apuesta.
+ * POR QUÉ ESTA ES LA SEGUNDA VERSIÓN
+ * La primera cambiaba color, tipografía, esquinas y densidad, y dejaba la
+ * pantalla exactamente igual: misma barra lateral, misma cabecera, mismas
+ * tarjetas en el mismo sitio. El cliente lo dijo sin rodeos —"solo cambia
+ * colores y tipografías"— y tenía razón: eso no es elegir entre tres
+ * diseños, es elegir entre tres paletas. También dijo que las tipografías
+ * eran poco serias, y también tenía razón: una grotesca de display y una
+ * monoespaciada no son letras para una herramienta de trabajo.
  *
- * QUÉ SE CAMBIA Y POR QUÉ ESO
- * Lo que hacía que el diseño anterior se sintiera generado por IA no era un
- * detalle, era la ausencia de punto de vista:
+ * Ahora cada dirección cambia LA ESTRUCTURA:
  *
- *   · acento #2563eb — el azul por defecto de Tailwind, el más repetido
- *   · Inter en todo — la tipografía por defecto de todo panel desde 2020
- *   · todo en tarjetas con el mismo radio y la misma sombra
- *   · densidad baja para lo que es una herramienta de trabajo
- *   · nombre "ERP" e icono con la letra inicial en un cuadrado
+ *   · dónde vive la navegación
+ *   · si el contenido va a sangre o centrado con margen
+ *   · si hay tarjetas o bloques planos separados por líneas
+ *   · si la cabecera es un bloque con título grande o una barra de una línea
+ *   · si hay barra de estado abajo
  *
- * Cada dirección corrige las cinco cosas a la vez, en una dirección concreta.
+ * Y las tres tipografías son de trabajo: Public Sans (la del sistema de
+ * diseño del gobierno de EE. UU.), IBM Plex Sans (heredera de la tipografía
+ * corporativa de IBM) y Geist. Ninguna llama la atención sobre sí misma.
  *
- * IMPLEMENTACIÓN: solo se sobrescriben variables CSS y tres constantes de
- * marca. Ningún componente sabe qué dirección está activa, así que cambiar de
- * una a otra no puede romper nada.
+ * CÓMO ESTÁ REPARTIDO EL TRABAJO
+ * La navegación se ramifica en JSX porque son tres árboles distintos. Todo
+ * lo demás —cabeceras, superficies, densidad, ancho— se resuelve en CSS con
+ * selectores `:root[data-direccion="…"]`. Así las once pantallas no se
+ * tocan: siguen usando `PageHeader` y `Card` como siempre, y es el CSS el
+ * que decide cómo se ven. Cambiar de dirección no puede romper una pantalla
+ * porque ninguna pantalla sabe qué dirección está activa.
  */
+
+export type Estructura = "lateral" | "superior" | "carril";
 
 export interface Theme {
   id: string;
@@ -31,11 +42,15 @@ export interface Theme {
   nombre: string;
   /** Qué apuesta hace y para quién. Se muestra al elegir. */
   apuesta: string;
+  /** En qué se nota, dicho en una línea. */
+  estructuraDescrita: string;
+  /** Dónde vive la navegación. Es lo único que se ramifica en JSX. */
+  estructura: Estructura;
   /** Nombre del producto en esta dirección. */
   marca: string;
   /** Descriptor bajo el nombre. */
   descriptor: string;
-  /** Icono: SVG inline, sin la letra inicial en un cuadrado. */
+  /** Icono: SVG inline. */
   icono: string;
   /** Familia tipográfica principal. */
   fuente: string;
@@ -46,124 +61,128 @@ export interface Theme {
 export const THEMES: Theme[] = [
   // -------------------------------------------------------------------------
   {
-    id: "mostrador",
-    nombre: "Mostrador",
+    id: "tablero",
+    nombre: "Tablero",
     apuesta:
-      "Cálida y cercana. Para que quien nunca usó un sistema no le tenga miedo.",
-    marca: "Mostrador",
-    descriptor: "Tu negocio, al día",
-    /* Un toldo de mercado. Concreto, del oficio, sin caricatura. */
-    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18l-1.5-4.5A1 1 0 0 0 18.55 4H5.45a1 1 0 0 0-.95.5L3 9Z"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 9v3a3 3 0 0 0 6 0V9"/></svg>`,
-    fuente: `var(--font-bricolage), var(--font-inter), system-ui, sans-serif`,
+      "Máxima información por pantalla. Para quien pasa el día aquí y necesita ver mucho de un vistazo.",
+    estructuraDescrita:
+      "Menú lateral · contenido a sangre, sin tarjetas · barra de estado abajo",
+    estructura: "lateral",
+    marca: "Demo",
+    descriptor: "Control de operación",
+    /* Rejilla de celdas: lo que se ve al abrirlo. */
+    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9.5h18"/><path d="M9 9.5V20"/></svg>`,
+    fuente: `var(--font-public-sans), system-ui, sans-serif`,
     tokens: {
-      /* Terracota quemada: cálida sin ser naranja de aviso. */
-      "--color-accent": "oklch(56% 0.15 42)",
-      "--color-accent-hover": "oklch(50% 0.15 42)",
-      "--color-accent-soft": "oklch(96% 0.028 55)",
+      /* Grafito. El acento no decora: aquí manda la información, y un color
+         saturado en cada botón compite con las cifras de la tabla. */
+      "--color-accent": "oklch(30% 0.014 260)",
+      "--color-accent-hover": "oklch(22% 0.014 260)",
+      "--color-accent-soft": "oklch(94% 0.006 260)",
       "--color-accent-ink": "oklch(100% 0 0)",
 
-      /* Fondo con un punto de calidez, no gris azulado. */
-      "--color-canvas": "oklch(98.5% 0.006 70)",
+      "--color-canvas": "oklch(100% 0 0)",
       "--color-surface": "oklch(100% 0 0)",
-      "--color-surface-sunken": "oklch(97% 0.008 70)",
-      "--color-ink": "oklch(24% 0.015 50)",
-      "--color-ink-muted": "oklch(52% 0.012 50)",
-      "--color-line": "oklch(92% 0.008 60)",
-      "--color-line-strong": "oklch(86% 0.012 60)",
+      "--color-surface-sunken": "oklch(97.5% 0.002 260)",
+      "--color-ink": "oklch(19% 0.008 260)",
+      "--color-ink-muted": "oklch(46% 0.008 260)",
+      "--color-line": "oklch(91% 0.003 260)",
+      "--color-line-strong": "oklch(83% 0.005 260)",
 
-      /* Radios generosos: se percibe amable, no severo. */
-      "--radius-sm": "0.5rem",
-      "--radius-md": "0.75rem",
-      "--radius-lg": "1rem",
-
-      /* Filas altas: se lee sin esfuerzo. Menos datos por pantalla, a cambio
-         de que nadie se pierda. */
-      "--densidad-fila": "3.25rem",
-      "--densidad-texto": "14px",
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  {
-    id: "caja",
-    nombre: "Caja",
-    apuesta:
-      "Densa y rápida. Para quien pasa ocho horas aquí y quiere ver todo de un vistazo.",
-    marca: "Caja",
-    descriptor: "Punto de venta",
-    /* Un cajón de dinero visto de frente. */
-    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="12" rx="1.5"/><path d="M2.5 11h19"/><path d="M9.5 15h5"/><path d="M6 7V5.5A1.5 1.5 0 0 1 7.5 4h9A1.5 1.5 0 0 1 18 5.5V7"/></svg>`,
-    fuente: `ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace`,
-    tokens: {
-      /* Verde terminal, no el azul de siempre. */
-      "--color-accent": "oklch(58% 0.13 165)",
-      "--color-accent-hover": "oklch(52% 0.13 165)",
-      "--color-accent-soft": "oklch(95% 0.03 165)",
-      "--color-accent-ink": "oklch(100% 0 0)",
-
-      "--color-canvas": "oklch(97.5% 0.003 240)",
-      "--color-surface": "oklch(100% 0 0)",
-      "--color-surface-sunken": "oklch(96% 0.004 240)",
-      "--color-ink": "oklch(20% 0.01 250)",
-      "--color-ink-muted": "oklch(48% 0.01 250)",
-      "--color-line": "oklch(90% 0.004 240)",
-      "--color-line-strong": "oklch(82% 0.006 240)",
-
-      /* Esquinas casi rectas: herramienta, no aplicación de consumo. */
       "--radius-xs": "0.125rem",
       "--radius-sm": "0.1875rem",
       "--radius-md": "0.25rem",
-      "--radius-lg": "0.3125rem",
+      "--radius-lg": "0.25rem",
 
-      /* Filas compactas: caben treinta productos donde antes diez. */
-      "--densidad-fila": "2.25rem",
-      "--densidad-texto": "12.5px",
+      /* Sin margen: la tabla llega al borde de la ventana. */
+      "--ancho-contenido": "100%",
+      "--margen-contenido": "0rem",
+      "--respiro-contenido": "0rem",
+      "--densidad-fila": "2.375rem",
     },
   },
 
   // -------------------------------------------------------------------------
   {
-    id: "libro",
-    nombre: "Libro",
+    id: "barra",
+    nombre: "Barra",
     apuesta:
-      "Sobria y formal. Transmite que aquí se guardan cuentas serias.",
-    marca: "Libro",
-    descriptor: "Registro y control del negocio",
-    /* Un libro de cuentas abierto. Enlaza con el libro mayor de inventario. */
-    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5 8.5 4.5 5 4.5A1.5 1.5 0 0 0 3.5 6v11A1.5 1.5 0 0 0 5 18.5c3.5 0 5.5.5 7 2 1.5-1.5 3.5-2 7-2a1.5 1.5 0 0 0 1.5-1.5V6A1.5 1.5 0 0 0 19 4.5c-3.5 0-5.5.5-7 2Z"/><path d="M12 6.5v14"/></svg>`,
-    /* Source Serif 4 y no una serifa de display: tiene pesos reales para las
-       cabeceras de tabla y cifras alineadas. Georgia, que era la alternativa
-       obvia, usa cifras de estilo antiguo —el 3 y el 9 bajan de la línea base—
-       y en una columna de dinero eso se lee como un error de renderizado. */
-    fuente: `var(--font-serif-libro), Georgia, "Times New Roman", serif`,
+      "Se parece a un programa de escritorio de toda la vida. Para quien viene de uno y no quiere reaprender dónde está todo.",
+    estructuraDescrita:
+      "Menú arriba, sin barra lateral · el contenido gana 240 px de ancho",
+    estructura: "superior",
+    marca: "Demo",
+    descriptor: "Administración del negocio",
+    /* Un edificio de comercio: fachada con toldo. */
+    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/><path d="M2.5 10 4.2 5.3A1 1 0 0 1 5.14 4.6h13.72a1 1 0 0 1 .94.7L21.5 10Z"/><path d="M9.5 20v-5.5h5V20"/></svg>`,
+    fuente: `var(--font-plex), system-ui, sans-serif`,
     tokens: {
-      /* Tinta. Literalmente: el acento es el mismo negro con que se escribe.
-         Antes era verde contable, pero puesto al lado de "Caja" las dos se
-         leían como "el sistema verde" y la elección dejaba de ser una
-         elección. Aquí el color no decora: lo que distingue esta dirección
-         es la tipografía con serifa, el papel y la ausencia de redondeo. */
-      "--color-accent": "oklch(26% 0.018 70)",
-      "--color-accent-hover": "oklch(18% 0.018 70)",
-      "--color-accent-soft": "oklch(93% 0.012 80)",
+      /* Verde pino: institucional sin ser corporativo genérico. */
+      "--color-accent": "oklch(45% 0.085 165)",
+      "--color-accent-hover": "oklch(39% 0.085 165)",
+      "--color-accent-soft": "oklch(95% 0.024 165)",
       "--color-accent-ink": "oklch(100% 0 0)",
 
-      /* Papel, no blanco de pantalla. */
-      "--color-canvas": "oklch(97.5% 0.008 90)",
-      "--color-surface": "oklch(99.5% 0.004 90)",
-      "--color-surface-sunken": "oklch(96% 0.01 90)",
-      "--color-ink": "oklch(22% 0.012 80)",
-      "--color-ink-muted": "oklch(48% 0.01 80)",
-      "--color-line": "oklch(89% 0.012 85)",
-      "--color-line-strong": "oklch(80% 0.016 85)",
+      "--color-canvas": "oklch(97% 0.004 200)",
+      "--color-surface": "oklch(100% 0 0)",
+      "--color-surface-sunken": "oklch(96% 0.005 200)",
+      "--color-ink": "oklch(21% 0.01 210)",
+      "--color-ink-muted": "oklch(47% 0.01 210)",
+      "--color-line": "oklch(90% 0.005 200)",
+      "--color-line-strong": "oklch(82% 0.008 200)",
 
-      /* Sin redondeo: documento, no aplicación. */
-      "--radius-xs": "0",
-      "--radius-sm": "0.0625rem",
-      "--radius-md": "0.125rem",
-      "--radius-lg": "0.125rem",
+      "--radius-xs": "0.1875rem",
+      "--radius-sm": "0.25rem",
+      "--radius-md": "0.375rem",
+      "--radius-lg": "0.5rem",
 
+      "--ancho-contenido": "100%",
+      "--margen-contenido": "1.25rem",
+      "--respiro-contenido": "1.25rem",
       "--densidad-fila": "2.75rem",
-      "--densidad-texto": "13.5px",
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  {
+    id: "carril",
+    nombre: "Carril",
+    apuesta:
+      "Tranquila y con aire. Para quien entra unas veces al día a mirar cómo va y no quiere sentirse en una cabina de mando.",
+    estructuraDescrita:
+      "Carril de iconos de 60 px · contenido centrado con margen · tarjetas",
+    estructura: "carril",
+    marca: "Demo",
+    descriptor: "Ventas, inventario y cuentas",
+    /* Capas apiladas: el libro mayor de movimientos, que es el corazón. */
+    icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8.5 4.5L12 12 3.5 7.5 12 3Z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/></svg>`,
+    fuente: `var(--font-geist), system-ui, sans-serif`,
+    tokens: {
+      /* Índigo profundo. No es el azul por defecto de Tailwind: está más
+         cerca del violeta y bastante más apagado. */
+      "--color-accent": "oklch(48% 0.14 278)",
+      "--color-accent-hover": "oklch(42% 0.14 278)",
+      "--color-accent-soft": "oklch(95% 0.028 278)",
+      "--color-accent-ink": "oklch(100% 0 0)",
+
+      "--color-canvas": "oklch(98% 0.004 275)",
+      "--color-surface": "oklch(100% 0 0)",
+      "--color-surface-sunken": "oklch(96.5% 0.006 275)",
+      "--color-ink": "oklch(22% 0.012 275)",
+      "--color-ink-muted": "oklch(49% 0.012 275)",
+      "--color-line": "oklch(91% 0.006 275)",
+      "--color-line-strong": "oklch(84% 0.009 275)",
+
+      "--radius-xs": "0.25rem",
+      "--radius-sm": "0.375rem",
+      "--radius-md": "0.625rem",
+      "--radius-lg": "0.875rem",
+
+      /* Centrado y con margen: se lee, no se escanea. */
+      "--ancho-contenido": "1080px",
+      "--margen-contenido": "2rem",
+      "--respiro-contenido": "2rem",
+      "--densidad-fila": "3rem",
     },
   },
 ];
@@ -171,7 +190,7 @@ export const THEMES: Theme[] = [
 export const THEME_STORAGE_KEY = "erp-direccion-visual";
 
 /** Dirección por defecto mientras el cliente no elige. */
-export const DEFAULT_THEME_ID = "mostrador";
+export const DEFAULT_THEME_ID = "tablero";
 
 export function getTheme(id: string | null | undefined): Theme {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];

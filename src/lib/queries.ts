@@ -118,6 +118,47 @@ export interface ProductFilters {
   sortDir?: "asc" | "desc";
 }
 
+/**
+ * ¿Son estos los filtros con los que el SERVIDOR resolvió la primera carga?
+ *
+ * ESTO ARREGLA UN FALLO REAL Y CARO. `initialData` se pasaba a todas las
+ * claves de consulta, no solo a la de la primera vista. Al escribir en el
+ * buscador, TanStack Query creaba una clave nueva, la sembraba con la
+ * primera página SIN FILTRAR, la daba por fresca durante `staleTime` —15
+ * segundos— y no pedía nada al servidor.
+ *
+ * Efecto para quien lo usa: escribes "Aceite" y la tabla sigue enseñando los
+ * doce productos durante quince segundos. Ni error, ni esqueleto, ni indicio
+ * de que algo va mal: parece que el buscador no filtra. Y como el resultado
+ * correcto acaba llegando pasados los quince segundos, es de esos fallos que
+ * no se reproducen cuando alguien va a mirarlos.
+ *
+ * Con la puerta cerrada, cualquier consulta filtrada no recibe semilla y
+ * sale a pedir de inmediato, enseñando mientras tanto la tabla anterior por
+ * `placeholderData`. Que es exactamente lo que se quería desde el principio.
+ */
+function esVistaInicial(filtros: {
+  search?: string;
+  categoryId?: string;
+  status?: string;
+  lowStock?: boolean;
+  customerId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+}): boolean {
+  return (
+    !filtros.search &&
+    !filtros.categoryId &&
+    !filtros.status &&
+    !filtros.lowStock &&
+    !filtros.customerId &&
+    !filtros.from &&
+    !filtros.to &&
+    (filtros.page ?? 1) === 1
+  );
+}
+
 export function useProducts(
   filters: ProductFilters,
   initialData?: Paginated<Product>,
@@ -140,8 +181,8 @@ export function useProducts(
     // muchísimo.
     placeholderData: (previous) => previous,
     // Datos de la primera carga, resueltos en el servidor dentro del mismo
-    // viaje que la página. Evita el segundo viaje y el esqueleto inicial.
-    initialData,
+    // viaje que la página. Solo para la vista sin filtrar: ver `esVistaInicial`.
+    initialData: esVistaInicial(filters) ? initialData : undefined,
   });
 }
 
@@ -269,9 +310,10 @@ export function useSales(
     queryKey: queryKeys.sales(filters),
     queryFn: () => api.get<Paginated<Sale>>("/sales", filters),
     placeholderData: (previous) => previous,
-    // Primera carga resuelta en el servidor. Quien la pasa se encarga de
-    // hacerlo solo cuando los filtros son los de por defecto.
-    initialData,
+    // Mismo fallo que en productos, misma puerta: la semilla del servidor
+    // solo vale para la vista sin filtrar. El comentario anterior decía que
+    // "quien la pasa se encarga", y no se encargaba nadie.
+    initialData: esVistaInicial(filters) ? initialData : undefined,
   });
 }
 

@@ -4,6 +4,7 @@ import type { RequestContext } from "@/server/core/context";
 import { UnauthenticatedError } from "@/server/core/errors";
 import { resolveSession } from "@/server/modules/auth";
 
+import { contextoAccesoLibre } from "./acceso-libre";
 import { readSessionToken } from "./session-cookie";
 
 /**
@@ -48,12 +49,18 @@ export async function getUserAgent(): Promise<string | null> {
  */
 export async function getOptionalContext(): Promise<RequestContext | null> {
   const token = await readSessionToken();
-  if (!token) return null;
-
   const [ip, userAgent] = await Promise.all([getClientIp(), getUserAgent()]);
-  const resolved = await resolveSession(token, { ip, userAgent });
 
-  return resolved?.context ?? null;
+  if (token) {
+    const resolved = await resolveSession(token, { ip, userAgent });
+    if (resolved) return resolved.context;
+  }
+
+  // Puerta abierta para enseñar la demo. Solo existe si `DEMO_ACCESO_LIBRE`
+  // está puesta; ver `acceso-libre.ts`. Va DESPUÉS de la sesión real para
+  // que quien sí haya entrado con sus credenciales siga siendo él mismo, y
+  // no lo degrademos al usuario invitado.
+  return contextoAccesoLibre(ip, userAgent);
 }
 
 /**

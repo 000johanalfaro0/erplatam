@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { QueryHydrator } from "@/components/query-hydrator";
 import { SessionProvider } from "@/components/session-provider";
+import { accesoLibreActivo } from "@/server/http/acceso-libre";
 import { getOptionalContext } from "@/server/http/context";
 import { getCurrentUser } from "@/server/modules/auth";
 import { getReferenceData } from "@/server/modules/reference";
@@ -24,6 +25,29 @@ import { getReferenceData } from "@/server/modules/reference";
  * profundidad: la comprobación que manda es esta, porque es la que consulta la
  * base de datos y detecta sesiones revocadas.
  */
+/**
+ * Aviso de puerta abierta.
+ *
+ * Mientras `DEMO_ACCESO_LIBRE` esté puesta, cualquiera con la URL entra sin
+ * contraseña. Eso tiene que verse desde la primera pantalla y en todas: un
+ * agujero que no se nota es el que se queda abierto seis meses.
+ */
+function AvisoAccesoLibre({ usuario }: { usuario: string }) {
+  return (
+    <div
+      role="status"
+      className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-[13px] text-ink"
+    >
+      <span className="font-medium text-warning">Acceso abierto</span>
+      <span className="text-ink-muted">
+        Cualquiera con este enlace entra sin contraseña, como {usuario}. Para
+        cerrarlo, quita <code className="font-mono text-[12px]">DEMO_ACCESO_LIBRE</code>{" "}
+        de las variables de Vercel.
+      </span>
+    </div>
+  );
+}
+
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const ctx = await getOptionalContext();
 
@@ -72,7 +96,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       }}
     >
       <QueryHydrator reference={reference}>
-        <AppShell>{children}</AppShell>
+        <AppShell>
+          {accesoLibreActivo() && <AvisoAccesoLibre usuario={user.name} />}
+          {children}
+        </AppShell>
       </QueryHydrator>
     </SessionProvider>
   );

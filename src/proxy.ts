@@ -84,9 +84,22 @@ export function proxy(request: NextRequest) {
     request.cookies.get(SESSION_COOKIE)?.value,
   );
 
+  /*
+   * Puerta abierta para enseñar la demo. Con `DEMO_ACCESO_LIBRE` puesta, este
+   * filtro deja pasar sin cookie; quien decide de verdad quién es el visitante
+   * sigue siendo `getOptionalContext`, que consulta la base de datos. Si la
+   * variable apunta a un correo que no existe o está desactivado, allí se
+   * resuelve a "sin sesión" y la petición acaba en el login igualmente.
+   *
+   * Aquí solo se abre el paso; no se concede identidad. Esa distinción es la
+   * misma de siempre en este archivo: el filtro es defensa en profundidad, no
+   * la autorización.
+   */
+  const accesoLibre = Boolean(process.env.DEMO_ACCESO_LIBRE?.trim());
+
   let response: NextResponse;
 
-  if (!hasSessionCookie && !isPublic(pathname)) {
+  if (!hasSessionCookie && !accesoLibre && !isPublic(pathname)) {
     if (pathname.startsWith("/api/")) {
       // Las llamadas de API reciben un 401 con el mismo formato de error que
       // el resto de la API, no una redirección HTML que el cliente no sabría
