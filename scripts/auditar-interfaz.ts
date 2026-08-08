@@ -155,20 +155,26 @@ async function main() {
     `"${(primeraFila ?? "").slice(0, 40).trim()}…"`,
   );
 
-  // Un término imposible tiene que dar cero, no todo. No se cuentan filas:
-  // con cero resultados la tabla pinta una fila con el mensaje de vacío, y
-  // contarla como resultado sería confundir "no hay nada" con "hay uno".
+  // Un término imposible tiene que acabar en "sin coincidencias".
+  //
+  // No se cuentan filas ni se usa una espera fija. Mientras llega la consulta
+  // nueva, la tabla sigue enseñando el resultado anterior a propósito
+  // —`placeholderData`, para no parpadear a un esqueleto en cada tecla—, así
+  // que mirar a los 900 ms mide la velocidad de la red, no si el buscador
+  // funciona. Se espera al estado que ve la persona.
   await buscador.fill("zzzzqqqxx");
-  await page.waitForTimeout(900);
 
-  const cuerpo = (await page.locator("tbody").textContent()) ?? "";
-  const sigueMostrandoProductos = productos.data.items.some(
-    (p: { name: string }) => cuerpo.includes(p.name),
-  );
+  const sinCoincidencias = await page
+    .getByText("Sin coincidencias")
+    .first()
+    .waitFor({ state: "visible", timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+
   ok(
-    "una búsqueda sin resultados no devuelve todo",
-    !sigueMostrandoProductos,
-    sigueMostrandoProductos ? "siguen apareciendo productos" : "tabla vacía",
+    "una búsqueda sin resultados acaba en 'sin coincidencias'",
+    sinCoincidencias,
+    sinCoincidencias ? "" : "la tabla siguió mostrando productos",
   );
 
   await buscador.fill("");

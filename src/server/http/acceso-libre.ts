@@ -33,8 +33,24 @@ import { db } from "@/server/core/db";
  * Así, quitar la variable cierra la puerta en el acto.
  */
 
+/** Marca reconocible en el contexto y en la bitácora. */
+export const SESION_ACCESO_LIBRE = "acceso-libre";
+
 export function accesoLibreActivo(): boolean {
   return Boolean(process.env.DEMO_ACCESO_LIBRE?.trim());
+}
+
+/**
+ * ¿Este contexto viene de la puerta abierta y no de unas credenciales?
+ *
+ * Lo usa la pantalla de acceso para NO redirigir al panel. Sin esta
+ * distinción, con la puerta abierta el login redirige siempre —porque
+ * siempre hay contexto— y el dueño se queda sin forma de entrar como
+ * administrador en su propio sistema. Es decir: abrir la demo al público
+ * dejaría fuera justo a quien la está enseñando.
+ */
+export function esAccesoLibre(ctx: { sessionId: string } | null): boolean {
+  return ctx?.sessionId === SESION_ACCESO_LIBRE;
 }
 
 /** Contexto del usuario de acceso libre, o null si no está configurado. */
@@ -67,7 +83,7 @@ export async function contextoAccesoLibre(
     permissions: usuario.role.permissions,
     // Identificador reconocible en la bitácora: si alguien ve esto en la
     // auditoría, sabe que esa acción vino de la puerta abierta.
-    sessionId: "acceso-libre",
+    sessionId: SESION_ACCESO_LIBRE,
     ip,
     userAgent,
   };
