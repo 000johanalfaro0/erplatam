@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -25,6 +25,7 @@ export function LoginForm({ expired }: { expired: boolean }) {
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const login = useMutation({
     mutationFn: () => api.post("/auth/login", { email, password }),
@@ -93,16 +94,17 @@ export function LoginForm({ expired }: { expired: boolean }) {
 
           <Field label="Contraseña" error={fieldErrors.password} required>
             {(props) => (
-              <Input
+              <div className="relative"><Input
                 {...props}
-                type="password"
+                type={showPassword ? "text" : "password"}
                 name="password"
                 autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={login.isPending}
-              />
+                className="pr-10"
+              /><button type="button" className="absolute inset-y-0 right-0 grid w-10 place-items-center text-ink-muted" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}>{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div>
             )}
           </Field>
 
