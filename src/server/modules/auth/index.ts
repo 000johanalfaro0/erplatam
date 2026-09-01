@@ -12,6 +12,7 @@ export {
   changePassword,
   getCurrentUser,
   login,
+  register,
   logout,
   type LoginResult,
 } from "./service";
@@ -36,7 +37,9 @@ export {
 export {
   changePasswordSchema,
   loginSchema,
+  registerSchema,
   passwordSchema,
   type ChangePasswordInput,
   type LoginInput,
+  type RegisterInput,
 } from "./schema";

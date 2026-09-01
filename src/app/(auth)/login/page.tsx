@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BrandMark } from "@/components/brand-mark";
@@ -32,8 +33,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
         <LoginForm expired={expired} />
 
-        <p className="mt-6 text-center text-[12px] text-ink-subtle">
-          Acceso restringido al personal autorizado.
+        <p className="mt-6 text-center text-[13px] text-ink-subtle">
+          ¿Nuevo en ERPLatam?{" "}
+          <Link href="/registro" className="font-medium text-accent hover:underline">
+            Crea tu empresa
+          </Link>
         </p>
       </div>
     </main>

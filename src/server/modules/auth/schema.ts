@@ -35,6 +35,22 @@ export const passwordSchema = z
   .regex(/[a-zA-Z]/, "Debe incluir al menos una letra")
   .regex(/\d/, "Debe incluir al menos un número");
 
+export const registerSchema = z
+  .object({
+    businessName: z.string().trim().min(2, "Escribe el nombre del negocio").max(120),
+    name: z.string().trim().min(2, "Escribe tu nombre").max(120),
+    email: z.string().trim().toLowerCase().email("El correo electrónico no tiene un formato válido").max(255),
+    countryCode: z.enum(["PE", "MX", "CO", "EC", "CL", "AR"]),
+    password: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Escribe tu contraseña actual"),

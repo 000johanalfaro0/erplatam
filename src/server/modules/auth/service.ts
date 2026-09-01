@@ -1,17 +1,20 @@
 import { AUDIT_ACTIONS, auditDetached } from "@/server/core/audit";
+import { COUNTRIES } from "@/config/countries";
 import type { RequestContext } from "@/server/core/context";
 import { db } from "@/server/core/db";
 import {
   BusinessRuleError,
+  ConflictError,
   InvalidCredentialsError,
   RateLimitError,
   UnauthenticatedError,
   ValidationError,
 } from "@/server/core/errors";
 import { logger } from "@/server/core/logger";
+import { DEFAULT_ROLES } from "@/server/core/permissions";
 
 import { hashPassword, verifyPassword, wastePasswordTime } from "./password";
-import type { ChangePasswordInput, LoginInput } from "./schema";
+import type { ChangePasswordInput, LoginInput, RegisterInput } from "./schema";
 import {
   type CreatedSession,
   createSession,
@@ -59,6 +62,93 @@ export interface LoginResult {
     permissions: string[];
     businessId: string;
     businessName: string;
+  };
+}
+
+export async function register(
+  input: RegisterInput,
+  meta: { ip?: string | null; userAgent?: string | null },
+): Promise<LoginResult> {
+  const existing = await db.user.findFirst({
+    where: { email: input.email, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) throw new ConflictError("Ya existe una cuenta con ese correo.");
+
+  const preset = COUNTRIES[input.countryCode];
+  const passwordHash = await hashPassword(input.password);
+  const user = await db.$transaction(async (tx) => {
+    const business = await tx.business.create({ data: { name: input.businessName } });
+    await tx.businessSettings.create({
+      data: {
+        businessId: business.id,
+        countryCode: input.countryCode,
+        currency: preset.currency,
+        locale: preset.locale,
+        timezone: preset.timezone,
+        defaultTaxRateBps: preset.taxRateBps,
+      },
+    });
+    const roles = await Promise.all(
+      Object.entries(DEFAULT_ROLES).map(([key, definition]) =>
+        tx.role.create({
+          data: {
+            businessId: business.id,
+            key,
+            name: definition.name,
+            description: definition.description,
+            permissions: definition.permissions,
+            isSystem: true,
+          },
+        }),
+      ),
+    );
+    const adminRole = roles.find((role) => role.key === "ADMIN")!;
+    const createdUser = await tx.user.create({
+      data: {
+        businessId: business.id,
+        email: input.email,
+        name: input.name,
+        passwordHash,
+        roleId: adminRole.id,
+      },
+    });
+    const paymentMethods = [
+      { code: "CASH", name: "Efectivo", requiresChange: true, sortOrder: 1 },
+      { code: "CARD", name: "Tarjeta", requiresChange: false, sortOrder: 2 },
+      { code: "TRANSFER", name: "Transferencia", requiresChange: false, sortOrder: 3 },
+      { code: "OTHER", name: "Otro", requiresChange: false, sortOrder: 4 },
+    ];
+    await Promise.all([
+      tx.taxRate.create({
+        data: {
+          businessId: business.id,
+          name: `Impuesto ${preset.taxRateBps / 100}%`,
+          rateBps: preset.taxRateBps,
+          isDefault: true,
+        },
+      }),
+      ...paymentMethods.map((method) =>
+        tx.paymentMethod.create({ data: { businessId: business.id, ...method } }),
+      ),
+      tx.documentCounter.create({ data: { businessId: business.id, docType: "SALE", prefix: "VTA" } }),
+      tx.documentCounter.create({ data: { businessId: business.id, docType: "PURCHASE", prefix: "CMP" } }),
+    ]);
+    return { ...createdUser, business };
+  });
+
+  const session = await createSession(user.id, meta);
+  return {
+    ...session,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      roleKey: "ADMIN",
+      permissions: ["*"],
+      businessId: user.businessId,
+      businessName: user.business.name,
+    },
   };
 }
 
