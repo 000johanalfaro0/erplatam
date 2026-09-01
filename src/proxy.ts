@@ -26,7 +26,12 @@ import { type NextRequest, NextResponse } from "next/server";
 const SESSION_COOKIE = "erp_session";
 
 /** Rutas accesibles sin sesión. */
-const PUBLIC_PATHS = ["/login", "/api/v1/auth/login"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/registro",
+  "/api/v1/auth/login",
+  "/api/v1/auth/register",
+];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some(
