@@ -1,5 +1,5 @@
 {
-  "name": "erp-mx",
+  "name": "erplatam",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -22,7 +22,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "prisma generate && npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
@@ -78,5 +78,10 @@
     "esbuild": true,
     "prisma": true,
     "unrs-resolver": true
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0",
+    "nanoid": "^3.3.18",
+    "uuid": "^11.1.1"
   }
 }

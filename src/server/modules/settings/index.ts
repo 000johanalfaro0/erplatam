@@ -52,6 +52,7 @@ function esZonaHorariaValida(zona: string): boolean {
 }
 
 export const updateSettingsSchema = z.object({
+  countryCode: z.enum(["PE", "MX", "CO", "EC", "CL", "AR"]).optional(),
   currency: z
     .string()
     .trim()
@@ -90,6 +91,7 @@ export const updateSettingsSchema = z.object({
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 const settingsSelect = {
+  countryCode: true,
   currency: true,
   locale: true,
   timezone: true,

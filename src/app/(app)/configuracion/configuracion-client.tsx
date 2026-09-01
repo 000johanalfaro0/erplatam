@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/surface";
 import { api } from "@/lib/api";
 import { percent } from "@/lib/format";
+import { COUNTRIES, COUNTRY_OPTIONS, type CountryCode } from "@/config/countries";
 import { PERMISSIONS } from "@/server/core/permissions";
 
 /**
@@ -48,6 +49,7 @@ function textoABps(texto: string): number {
  */
 
 interface Settings {
+  countryCode: CountryCode;
   currency: string;
   locale: string;
   timezone: string;
@@ -77,16 +79,6 @@ interface PaymentMethod {
   isActive: boolean;
   sortOrder: number;
 }
-
-/** Zonas horarias de México, que es donde opera el negocio. */
-const ZONAS = [
-  { valor: "America/Mexico_City", etiqueta: "Centro (Ciudad de México)" },
-  { valor: "America/Cancun", etiqueta: "Sureste (Cancún)" },
-  { valor: "America/Monterrey", etiqueta: "Centro (Monterrey)" },
-  { valor: "America/Chihuahua", etiqueta: "Pacífico (Chihuahua)" },
-  { valor: "America/Hermosillo", etiqueta: "Noroeste (Hermosillo)" },
-  { valor: "America/Tijuana", etiqueta: "Noroeste (Tijuana)" },
-];
 
 export default function ConfiguracionClient() {
   const { can } = useSession();
@@ -538,6 +530,18 @@ function BloqueLocalizacion({ puedeEscribir, queryClient }: Bloque) {
 
       <CardBody className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="País" hint="Aplica moneda, formato, zona horaria e impuesto sugerido.">
+            {(props) => (
+              <Select {...props} value={valor("countryCode") ?? "MX"} disabled={!puedeEscribir}
+                onChange={(e) => {
+                  const countryCode = e.target.value as CountryCode;
+                  const preset = COUNTRIES[countryCode];
+                  setBorrador((b) => ({ ...b, countryCode, currency: preset.currency, locale: preset.locale, timezone: preset.timezone, defaultTaxRateBps: preset.taxRateBps }));
+                }}>
+                {COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
+              </Select>
+            )}
+          </Field>
           <Field
             label="Zona horaria"
             hint="Decide a qué día pertenece cada venta en los reportes."
@@ -551,11 +555,7 @@ function BloqueLocalizacion({ puedeEscribir, queryClient }: Bloque) {
                   setBorrador((b) => ({ ...b, timezone: e.target.value }))
                 }
               >
-                {ZONAS.map((zona) => (
-                  <option key={zona.valor} value={zona.valor}>
-                    {zona.etiqueta}
-                  </option>
-                ))}
+                {COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.timezone}>{country.name} · {country.timezone}</option>)}
               </Select>
             )}
           </Field>

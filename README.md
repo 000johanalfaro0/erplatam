@@ -1,7 +1,8 @@
-# ERP
+# ERPLatam
 
-Sistema de gestión empresarial para el mercado mexicano: ventas, inventario,
-compras, gastos, clientes y reportes.
+Sistema de gestión empresarial multipaís para Latinoamérica: ventas,
+inventario, compras, gastos, clientes y reportes. Incluye perfiles iniciales
+para Perú, México, Colombia, Ecuador, Chile y Argentina.
 
 ## Arranque rápido
 

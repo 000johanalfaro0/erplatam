@@ -132,6 +132,7 @@ async function main() {
     update: {},
     create: {
       businessId: business.id,
+      countryCode: "MX",
       currency: "MXN",
       locale: "es-MX",
       timezone: "America/Mexico_City",

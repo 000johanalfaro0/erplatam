@@ -74,7 +74,8 @@ model BusinessSettings {
   id         String @id @default(uuid())
   businessId String @unique
 
-  // --- Localización (México por defecto) ---
+  // --- Localización ---
+  countryCode String @default("MX")
   currency String @default("MXN")
   locale   String @default("es-MX")
   timezone String @default("America/Mexico_City")

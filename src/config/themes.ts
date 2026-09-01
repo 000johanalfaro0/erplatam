@@ -67,8 +67,8 @@ export const THEMES: Theme[] = [
     estructuraDescrita:
       "Menú lateral · contenido a sangre, sin tarjetas · barra de estado abajo",
     estructura: "lateral",
-    marca: "Demo",
-    descriptor: "Control de operación",
+    marca: "ERPLatam",
+    descriptor: "Control de operación multipaís",
     /* Rejilla de celdas: lo que se ve al abrirlo. */
     icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9.5h18"/><path d="M9 9.5V20"/></svg>`,
   },
@@ -83,8 +83,8 @@ export const THEMES: Theme[] = [
     estructuraDescrita:
       "Menú arriba, sin barra lateral · el contenido gana 240 px de ancho",
     estructura: "superior",
-    marca: "Demo",
-    descriptor: "Administración del negocio",
+    marca: "ERPLatam",
+    descriptor: "Administración para Latinoamérica",
     /* Un edificio de comercio: fachada con toldo. */
     icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/><path d="M2.5 10 4.2 5.3A1 1 0 0 1 5.14 4.6h13.72a1 1 0 0 1 .94.7L21.5 10Z"/><path d="M9.5 20v-5.5h5V20"/></svg>`,
   },
@@ -99,7 +99,7 @@ export const THEMES: Theme[] = [
     estructuraDescrita:
       "Carril de iconos de 60 px · contenido centrado con margen · tarjetas",
     estructura: "carril",
-    marca: "Demo",
+    marca: "ERPLatam",
     descriptor: "Ventas, inventario y cuentas",
     /* Capas apiladas: el libro mayor de movimientos, que es el corazón. */
     icono: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8.5 4.5L12 12 3.5 7.5 12 3Z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/></svg>`,
